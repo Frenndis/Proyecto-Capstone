@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    { "collectionGroup": "ciclos", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "lineaId", "order": "ASCENDING" }, { "fieldPath": "inicio", "order": "DESCENDING" }] },
+    { "collectionGroup": "alertas", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "cicloId", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] },
+    { "collectionGroup": "alertas", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "reconocida", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] },
+    { "collectionGroup": "lecturas", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "etapa", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "ASCENDING" }] }
+  ],
+  "fieldOverrides": []
+}

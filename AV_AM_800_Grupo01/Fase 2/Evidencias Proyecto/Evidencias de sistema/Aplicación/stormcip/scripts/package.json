@@ -1,0 +1,6 @@
+{
+  "name": "stormcip-scripts",
+  "private": true,
+  "scripts": { "seed": "node seed.js", "sim": "node simulador.js" },
+  "dependencies": { "firebase-admin": "^12.7.0" }
+}

@@ -1,0 +1,7 @@
+node_modules/
+functions/lib/
+web/.next/
+web/out/
+.env*
+*-debug.log
+serviceAccount*.json
