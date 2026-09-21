@@ -1,0 +1,49 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Rol viene de custom claims (lo asigna la Function setUserRole)
+    function signedIn()  { return request.auth != null; }
+    function rol()       { return request.auth.token.rol; }
+    function isAdmin()   { return signedIn() && rol() == 'admin'; }
+    function isOper()    { return signedIn() && rol() in ['admin', 'operador']; }
+    function canRead()   { return signedIn() && rol() in ['admin', 'operador', 'visor']; }
+
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow write: if isAdmin();
+    }
+    match /plantas/{plantaId} {
+      allow read: if canRead();
+      allow write: if isAdmin();
+      match /lineas/{lineaId} {
+        allow read: if canRead();
+        allow write: if isAdmin();
+      }
+    }
+    match /ciclos/{cicloId} {
+      allow read: if canRead();
+      allow create, update: if isOper();
+      allow delete: if isAdmin();
+      // Lecturas solo las escribe el backend (ingestLectura)
+      match /lecturas/{lecturaId} {
+        allow read: if canRead();
+        allow write: if false;
+      }
+    }
+    match /alertas/{alertaId} {
+      allow read: if canRead();
+      // Operador solo puede "reconocer" la alerta
+      allow update: if isOper() && request.resource.data.diff(resource.data)
+        .affectedKeys().hasOnly(['reconocida', 'reconocidaPor', 'reconocidaEn']);
+      allow create, delete: if false;
+    }
+    match /dispositivos/{deviceId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+    match /configuracion/{docId} {
+      allow read: if canRead();
+      allow write: if isAdmin();
+    }
+  }
+}
