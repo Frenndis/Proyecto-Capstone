@@ -1,0 +1,13 @@
+v1.3.3
+1. Add COD and DO2 sensors
+2. Remove datalog function
+
+v1.3.1
+1. Added residual chlorine transmitter and four electrode EC transmitter
+2. Add a new turbidity sensor TS200，TS4000
+
+v1.2
+1. pH, do, ec have added temperature data
+
+v1.1
+1. Modify the data processing mechanism of the new water quality sensor
