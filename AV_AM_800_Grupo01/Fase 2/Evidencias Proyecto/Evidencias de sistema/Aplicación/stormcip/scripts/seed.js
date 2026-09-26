@@ -17,6 +17,17 @@ const db = admin.firestore();
     apiKeyHash: crypto.createHash("sha256").update("dev-key-123").digest("hex"),
   });
 
+  // Unidad WQS-LB con 3 sondas Dragino conectadas por RS485 (ver Base de datos/modelo-datos-sensores.md)
+  await db.doc("dispositivos/wqs-lb-01").set({
+    plantaId: "frutillar", lineaId: "cip-01", tipo: "wqs-lb", activo: true,
+    apiKeyHash: crypto.createHash("sha256").update("dev-key-wqs-456").digest("hex"),
+    sondas: [
+      { puerto: 1, modelo: "DR-PH01" },
+      { puerto: 2, modelo: "DR-EC200" },
+      { puerto: 3, modelo: "DR-TS200" },
+    ],
+  });
+
   // Rangos tomados de la presentación (ácido ±5 °C es supuesto, validar con cliente)
   const enjuague = { caudal: { min: 16 }, presion: { min: 2, max: 3 } };
   await db.doc("configuracion/umbrales").set({
@@ -48,6 +59,6 @@ const db = admin.firestore();
   await admin.auth().setCustomUserClaims(user.uid, { rol: "admin" });
   await db.doc(`users/${user.uid}`).set({ email: user.email, nombre: "Admin", rol: "admin" });
 
-  console.log("Seed OK -> admin@stormcip.dev / admin123 | device esp32-01 / dev-key-123");
+  console.log("Seed OK -> admin@stormcip.dev / admin123 | esp32-01/dev-key-123 | wqs-lb-01/dev-key-wqs-456");
   process.exit(0);
 })();

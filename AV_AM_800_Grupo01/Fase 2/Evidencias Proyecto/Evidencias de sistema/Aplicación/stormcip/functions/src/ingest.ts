@@ -1,7 +1,9 @@
 import { onRequest } from "firebase-functions/v2/https";
 import { getFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createHash } from "crypto";
-import { VARIABLES, ETAPAS, Variable, Etapa, Umbrales } from "./types";
+import {
+  VARIABLES, ETAPAS, Variable, Etapa, Umbrales, Sonda, EspecVariable, CATALOGO_SONDAS,
+} from "./types";
 
 /**
  * POST /api/ingest   header: x-api-key
@@ -46,6 +48,31 @@ export const ingestLectura = onRequest(async (req, res) => {
   if (Object.keys(limpios).length === 0) {
     res.status(400).json({ error: "Sin variables válidas" });
     return;
+  }
+
+  // 2b. Si el dispositivo declara sondas (unidad WQS-LB), validar pertenencia y rango físico.
+  // Dispositivos sin `sondas` (ej. esp32-01) mantienen la validación anterior sin cambios.
+  const sondas = dev.get("sondas") as Sonda[] | undefined;
+  if (sondas?.length) {
+    const especPorVariable = new Map<Variable, EspecVariable>();
+    for (const { modelo } of sondas) {
+      for (const [v, espec] of Object.entries(CATALOGO_SONDAS[modelo])) {
+        especPorVariable.set(v as Variable, espec as EspecVariable);
+      }
+    }
+    for (const [v, n] of Object.entries(limpios) as [Variable, number][]) {
+      const espec = especPorVariable.get(v);
+      if (!espec) {
+        res.status(400).json({ error: `El dispositivo no tiene una sonda para "${v}"` });
+        return;
+      }
+      if (n < espec.min || n > espec.max) {
+        res.status(400).json({
+          error: `Valor de ${v} fuera de rango físico (${espec.min}–${espec.max} ${espec.unidad})`,
+        });
+        return;
+      }
+    }
   }
 
   // 3. Ciclo y umbrales de la etapa
