@@ -50,6 +50,8 @@ Se agrega el campo opcional `sondas: Sonda[]` para modelar que **un `deviceId` =
 
 Dispositivos legado (ej. `esp32-01`) sin campo `sondas` mantienen el comportamiento anterior (solo se valida que el valor sea numérico), para no romper compatibilidad.
 
+> ⚠️ **Corrección pendiente**: al revisar el protocolo LoRaWAN real del WQS-LB (ver [sección 5](#5-arquitectura-de-integración-lorawan--backend)), el dispositivo identifica sus sondas por un **byte de flags de 6 bits** (pH, EC_K1, EC_K10, ORP, O₂ disuelto, turbidez), no por un `puerto` 1/2/3 libre como se modeló aquí. Este campo `sondas` hay que ajustarlo antes de implementar el adaptador real — ver sección 5.2.
+
 ### 2.3 Validación en `ingestLectura` (`functions/src/ingest.ts`)
 Si el dispositivo tiene `sondas` configuradas, además de la validación existente (variable conocida + numérica), se valida:
 1. **Pertenencia**: la variable debe corresponder a alguna de las sondas conectadas a ese `deviceId` (rechaza datos de una variable que ese dispositivo no puede medir).
@@ -79,6 +81,80 @@ configuracion/umbrales
   └─ {etapa}: {variable: {min,max}}    ← reglas de proceso, no de hardware
 ```
 
-## 4. Pendiente / siguientes pasos
+## 5. Arquitectura de integración LoRaWAN → Backend
+
+Lo diseñado en las secciones 1-3 asume que `POST /api/ingest` recibe un JSON `{deviceId, cicloId, etapa, valores}`. **El sensor real nunca envía ese formato.** Esta sección documenta la brecha real entre el hardware y `ingestLectura`, basada en la documentación oficial de Dragino (wiki + [decoder oficial](https://github.com/dragino/dragino-end-node-decoder/blob/main/WQS-LB/WQS-LB_TTN_Decoder.txt)).
+
+### 5.1 Formato real del payload LoRaWAN
+
+El WQS-LB sube datos binarios (no JSON) en distintos **FPort**:
+
+| FPort | Contenido | Notas |
+|---|---|---|
+| 2 | Lectura en tiempo real | Batería, temperatura DS18B20, byte de flags + valores de sondas activas |
+| 3 | Datalog | Lecturas guardadas cuando no hubo ACK de red (hasta 3 mediciones/trama, con timestamp Unix) |
+| 5 | Estado del dispositivo | Modelo, versión firmware, banda de frecuencia, batería — se envía cada 12h |
+
+**Byte de flags (FPort=2)** — 6 bits inferiores, cada uno indica si esa sonda está presente y con qué divisor decodificar su valor:
+
+| Bit | Sonda | Divisor |
+|---|---|---|
+| 5 | Turbidez | ÷10 |
+| 4 | Oxígeno disuelto | ÷100 |
+| 3 | ORP | valor directo |
+| 2 | EC_K10 | ×10 |
+| 1 | EC_K1 | valor directo |
+| 0 | pH | ÷100 |
+
+**Intervalo de envío por defecto: 20 minutos** (configurable vía comando AT `AT+TDC`, pero pensado para bajo consumo — no para streaming en tiempo real como simulamos con `simulador.js` cada 2-3s).
+
+### 5.2 Corrección al modelo `dispositivos.sondas`
+
+El diseño de la sección 2.2 (`sondas: [{puerto, modelo}]`) asume puertos libres con cualquier modelo de sonda. El hardware real es más rígido: son **6 tipos de sonda fijos identificados por bit**, y el decoder revisado solo cubre pH, EC_K1, EC_K10, ORP, O₂ disuelto y turbidez — **no incluye cloro residual (`DR-CL`) ni COD (`DR-COD`)**, que probablemente requieran otra variante de firmware/decoder aún no revisada. Antes de implementar el adaptador (5.3) hay que:
+- Confirmar si existe un decoder de Dragino que sí cubra CL/COD, o si esas sondas no son compatibles con la unidad WQS-LB actual.
+- Simplificar `Sonda` a algo como `{ bit: 0-5, variable: Variable }` que refleje el flag real, en vez de un `puerto` arbitrario.
+
+### 5.3 Flujo de integración propuesto
+
+```
+Sensor WQS-LB (RS485: pH/EC/ORP/DO/turbidez)
+   │  LoRaWAN uplink (binario, FPort 2/3/5)
+   ▼
+Gateway LoRaWAN
+   ▼
+Network Server (The Things Stack / TTN)
+   │  decoder oficial Dragino (JavaScript) → JSON decodificado
+   ▼
+Webhook / integración TTN → MQTT o HTTP
+   ▼
+┌───────────────────────────────────────────┐
+│ NUEVO: Cloud Function "adaptador"          │  ← no existe todavía
+│  1. Recibe el payload de TTN               │
+│  2. Mapea el Device EUI → deviceId propio  │
+│  3. Traduce el JSON decodificado a         │
+│     {ph, orp, turbidez, ...} (Variable)    │
+│  4. Resuelve cicloId/etapa activos para    │
+│     la línea de ese dispositivo            │  ← problema abierto, ver 5.4
+│  5. Llama a la misma lógica de             │
+│     ingestLectura (o hace el POST interno) │
+└───────────────────────────────────────────┘
+   ▼
+POST /api/ingest  (formato ya validado en esta sesión)
+```
+
+### 5.4 Problema abierto: el sensor no conoce el "ciclo CIP"
+
+El payload del WQS-LB **nunca incluye `cicloId` ni `etapa`** — el dispositivo solo sabe medir agua, no participa del proceso de negocio. El adaptador del punto 5.3 necesita resolver "¿cuál es el ciclo activo y la etapa actual de la línea a la que pertenece este `deviceId`?" antes de poder llamar a `ingestLectura`. Posibles enfoques a evaluar en el próximo sprint:
+- Mantener en `dispositivos/{deviceId}` un puntero `cicloActivoId` que el operador actualiza al iniciar/cambiar de etapa un ciclo, y que el adaptador lee en cada uplink.
+- Que el propio ingest infiera el ciclo "en curso" de la línea del dispositivo (consultando `ciclos` por `lineaId` + `estado: "en_curso"`), evitando mantener el puntero duplicado.
+
+### 5.5 Brechas conocidas para el siguiente sprint
+- No hay cuenta de The Things Stack ni gateway LoRaWAN configurado — nada de esto se pudo probar con hardware real.
+- El decoder oficial revisado no cubre `cloroResidual` ni `cod`.
+- El intervalo por defecto (20 min) es mucho más lento que los umbrales de proceso pensados para un ciclo CIP (minutos) — evaluar si hay que reconfigurar `AT+TDC` en el dispositivo real.
+- Falta decidir dónde vive el adaptador (¿nueva Cloud Function HTTP, o Pub/Sub trigger si TTN integra vía Google Cloud IoT/Pub-Sub?).
+
+## 6. Pendiente / siguientes pasos
 - Definir umbrales de proceso por etapa para las 4 variables nuevas (orp, oxigenoDisuelto, cloroResidual, cod) junto al cliente (Soprole/Austral Chemicals), igual que se hizo para temperatura/concentración/pH/turbidez.
 - Evaluar si el frontend necesita mostrar la unidad/rango de `CATALOGO_SONDAS` en el dashboard para dar contexto al operador.
+- Implementar el adaptador LoRaWAN→ingest descrito en la sección 5, una vez se resuelvan los puntos 5.2 y 5.4.
