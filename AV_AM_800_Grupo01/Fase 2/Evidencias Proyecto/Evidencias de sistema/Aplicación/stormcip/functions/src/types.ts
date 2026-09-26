@@ -23,7 +23,29 @@ export const MODELOS_SONDA = [
 ] as const;
 export type ModeloSonda = (typeof MODELOS_SONDA)[number];
 
-export type Sonda = { puerto: 1 | 2 | 3; modelo: ModeloSonda };
+// Sin "puerto": el protocolo LoRaWAN del WQS-LB identifica sondas por tipo (ver
+// BIT_SONDA_LORAWAN), no por puerto físico libre.
+export type Sonda = { modelo: ModeloSonda };
+
+// Modelos que el firmware/decoder oficial del WQS-LB realmente reporta por LoRaWAN.
+// DR-EC200, DR-CL-2ML, DR-CL-10ML y DR-COD NO están en el decoder revisado
+// (github.com/dragino/dragino-end-node-decoder, WQS-LB_TTN_Decoder.txt) — podrían
+// requerir otra variante de firmware, a confirmar antes de usarlos en campo.
+export const SOPORTADO_LORAWAN_WQSLB: ModeloSonda[] = [
+  "DR-PH01", "DR-ECK1.0", "DR-ECK10.0", "DR-ORP1", "DR-DO1", "DR-DO2", "DR-TS200", "DR-TS4000",
+];
+
+// Byte de flags (bits 0-5 de bytes[4], FPort=2) del decoder oficial Dragino: indica
+// qué sondas están presentes en cada uplink y con qué nombre aparece el campo ya
+// decodificado por TTN en `uplink_message.decoded_payload`.
+export const BIT_SONDA_LORAWAN: { bit: number; campoDecoder: string; variable: Variable }[] = [
+  { bit: 0, campoDecoder: "PH", variable: "ph" },
+  { bit: 1, campoDecoder: "EC_K1", variable: "conductividad" },
+  { bit: 2, campoDecoder: "EC_K10", variable: "conductividad" },
+  { bit: 3, campoDecoder: "ORP", variable: "orp" },
+  { bit: 4, campoDecoder: "dissolved_oxygen", variable: "oxigenoDisuelto" },
+  { bit: 5, campoDecoder: "turbidity", variable: "turbidez" },
+];
 
 // Rango físico de fábrica por variable (datasheet Dragino) — valida que la lectura sea posible,
 // distinto de `Umbrales` que valida que sea aceptable para el proceso CIP.

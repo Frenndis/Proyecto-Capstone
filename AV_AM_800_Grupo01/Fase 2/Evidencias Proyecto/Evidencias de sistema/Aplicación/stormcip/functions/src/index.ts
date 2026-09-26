@@ -5,4 +5,5 @@ initializeApp();
 setGlobalOptions({ region: "southamerica-west1", maxInstances: 10 });
 
 export { ingestLectura } from "./ingest";
+export { ttnUplink } from "./lorawanAdapter";
 export { onUserCreated, setUserRole } from "./auth";

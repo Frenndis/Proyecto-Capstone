@@ -17,14 +17,16 @@ const db = admin.firestore();
     apiKeyHash: crypto.createHash("sha256").update("dev-key-123").digest("hex"),
   });
 
-  // Unidad WQS-LB con 3 sondas Dragino conectadas por RS485 (ver Base de datos/modelo-datos-sensores.md)
+  // Unidad WQS-LB con 3 sondas Dragino soportadas por el protocolo LoRaWAN real
+  // (ver Base de datos/modelo-datos-sensores.md, sección 5 — sin "puerto": el
+  // decoder identifica sondas por tipo, no por puerto físico libre)
   await db.doc("dispositivos/wqs-lb-01").set({
     plantaId: "frutillar", lineaId: "cip-01", tipo: "wqs-lb", activo: true,
     apiKeyHash: crypto.createHash("sha256").update("dev-key-wqs-456").digest("hex"),
     sondas: [
-      { puerto: 1, modelo: "DR-PH01" },
-      { puerto: 2, modelo: "DR-EC200" },
-      { puerto: 3, modelo: "DR-TS200" },
+      { modelo: "DR-PH01" },
+      { modelo: "DR-ECK10.0" },
+      { modelo: "DR-TS200" },
     ],
   });
 

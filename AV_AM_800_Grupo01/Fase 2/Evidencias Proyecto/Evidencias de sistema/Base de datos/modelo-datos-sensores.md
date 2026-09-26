@@ -28,7 +28,9 @@ Una unidad **WQS-LB** (transmisor LoRaWAN) conecta de **1 a 3 sondas** por RS485
 ### 2.1 `functions/src/types.ts`
 - Se agregan a `VARIABLES`: `orp`, `oxigenoDisuelto`, `cloroResidual`, `cod`.
 - Nuevo catálogo estático `CATALOGO_SONDAS`: mapea cada modelo de sonda a sus variables con `{ unidad, min, max, resolucion }`, tomado directamente del datasheet. Es código, no colección Firestore, porque son especificaciones fijas de hardware que no cambian en runtime.
-- Nuevo tipo `Sonda = { puerto: 1|2|3; modelo: ModeloSonda }`.
+- Nuevo tipo `Sonda = { modelo: ModeloSonda }` — **sin `puerto`** (corregido, ver 5.2): el protocolo LoRaWAN real identifica sondas por tipo fijo, no por puerto libre.
+- Nuevo `SOPORTADO_LORAWAN_WQSLB`: subconjunto de `MODELOS_SONDA` que el decoder oficial del WQS-LB realmente reporta (excluye `DR-EC200`, `DR-CL-2ML`, `DR-CL-10ML`, `DR-COD`).
+- Nuevo `BIT_SONDA_LORAWAN`: mapea cada bit del byte de flags (FPort=2) al nombre de campo que entrega el decoder de TTN (`PH`, `EC_K1`, `EC_K10`, `ORP`, `dissolved_oxygen`, `turbidity`) y a la `Variable` interna correspondiente.
 
 ### 2.2 `dispositivos/{deviceId}`
 Se agrega el campo opcional `sondas: Sonda[]` para modelar que **un `deviceId` = una unidad física WQS-LB** con hasta 3 sondas conectadas:
@@ -41,16 +43,16 @@ Se agrega el campo opcional `sondas: Sonda[]` para modelar que **un `deviceId` =
   "activo": true,
   "apiKeyHash": "...",
   "sondas": [
-    { "puerto": 1, "modelo": "DR-PH01" },
-    { "puerto": 2, "modelo": "DR-EC200" },
-    { "puerto": 3, "modelo": "DR-TS200" }
+    { "modelo": "DR-PH01" },
+    { "modelo": "DR-ECK10.0" },
+    { "modelo": "DR-TS200" }
   ]
 }
 ```
 
 Dispositivos legado (ej. `esp32-01`) sin campo `sondas` mantienen el comportamiento anterior (solo se valida que el valor sea numérico), para no romper compatibilidad.
 
-> ⚠️ **Corrección pendiente**: al revisar el protocolo LoRaWAN real del WQS-LB (ver [sección 5](#5-arquitectura-de-integración-lorawan--backend)), el dispositivo identifica sus sondas por un **byte de flags de 6 bits** (pH, EC_K1, EC_K10, ORP, O₂ disuelto, turbidez), no por un `puerto` 1/2/3 libre como se modeló aquí. Este campo `sondas` hay que ajustarlo antes de implementar el adaptador real — ver sección 5.2.
+> ✅ **Corregido** (ver [sección 5.2](#52-corrección-al-modelo-dispositivossondas)): se quitó `puerto` del tipo `Sonda`. El ejemplo de seed usa `DR-ECK10.0` en vez de `DR-EC200`, que no está soportado por el decoder LoRaWAN real.
 
 ### 2.3 Validación en `ingestLectura` (`functions/src/ingest.ts`)
 Si el dispositivo tiene `sondas` configuradas, además de la validación existente (variable conocida + numérica), se valida:
@@ -66,7 +68,7 @@ Esto es una capa distinta de `configuracion/umbrales`: los umbrales son **reglas
 
 ```
 dispositivos/{deviceId}
-  ├─ sondas: [{puerto, modelo}]        ← nuevo
+  ├─ sondas: [{modelo}]                ← nuevo
   └─ apiKeyHash, activo, lineaId, ultimoPing
 
 ciclos/{cicloId}
@@ -108,53 +110,57 @@ El WQS-LB sube datos binarios (no JSON) en distintos **FPort**:
 
 **Intervalo de envío por defecto: 20 minutos** (configurable vía comando AT `AT+TDC`, pero pensado para bajo consumo — no para streaming en tiempo real como simulamos con `simulador.js` cada 2-3s).
 
-### 5.2 Corrección al modelo `dispositivos.sondas`
+### 5.2 Corrección al modelo `dispositivos.sondas` ✅
 
-El diseño de la sección 2.2 (`sondas: [{puerto, modelo}]`) asume puertos libres con cualquier modelo de sonda. El hardware real es más rígido: son **6 tipos de sonda fijos identificados por bit**, y el decoder revisado solo cubre pH, EC_K1, EC_K10, ORP, O₂ disuelto y turbidez — **no incluye cloro residual (`DR-CL`) ni COD (`DR-COD`)**, que probablemente requieran otra variante de firmware/decoder aún no revisada. Antes de implementar el adaptador (5.3) hay que:
-- Confirmar si existe un decoder de Dragino que sí cubra CL/COD, o si esas sondas no son compatibles con la unidad WQS-LB actual.
-- Simplificar `Sonda` a algo como `{ bit: 0-5, variable: Variable }` que refleje el flag real, en vez de un `puerto` arbitrario.
+El diseño original (`sondas: [{puerto, modelo}]`) asumía puertos libres con cualquier modelo de sonda. El hardware real es más rígido: son **6 tipos de sonda fijos identificados por bit**, y el decoder revisado solo cubre pH, EC_K1, EC_K10, ORP, O₂ disuelto y turbidez — **no incluye cloro residual (`DR-CL`) ni COD (`DR-COD`)**, que probablemente requieran otra variante de firmware/decoder aún no revisada.
 
-### 5.3 Flujo de integración propuesto
+**Implementado en `types.ts`**: se quitó `puerto` del tipo `Sonda` (ahora `{ modelo: ModeloSonda }`), se agregó `SOPORTADO_LORAWAN_WQSLB` (los 8 modelos que sí decodifica el WQS-LB) y `BIT_SONDA_LORAWAN` (bit → nombre de campo del decoder → `Variable`). El seed de ejemplo se actualizó a `DR-PH01` + `DR-ECK10.0` + `DR-TS200` (todas soportadas), reemplazando `DR-EC200`.
+
+**Pendiente real**: confirmar con Dragino si existe un decoder que cubra CL/COD, o si esas sondas simplemente no son compatibles con la unidad WQS-LB.
+
+### 5.3 Adaptador implementado: `functions/src/lorawanAdapter.ts` ✅
+
+Se implementó `ttnUplink`, una Cloud Function HTTP separada de `ingestLectura`, expuesta en `/api/ttn-uplink` (`firebase.json`). Flujo real:
 
 ```
 Sensor WQS-LB (RS485: pH/EC/ORP/DO/turbidez)
    │  LoRaWAN uplink (binario, FPort 2/3/5)
    ▼
-Gateway LoRaWAN
+Gateway LoRaWAN → Network Server (The Things Stack / TTN)
+   │  decoder oficial Dragino (JavaScript) → uplink_message.decoded_payload
    ▼
-Network Server (The Things Stack / TTN)
-   │  decoder oficial Dragino (JavaScript) → JSON decodificado
+Webhook TTN → POST /api/ttn-uplink   (header x-webhook-secret)
    ▼
-Webhook / integración TTN → MQTT o HTTP
-   ▼
-┌───────────────────────────────────────────┐
-│ NUEVO: Cloud Function "adaptador"          │  ← no existe todavía
-│  1. Recibe el payload de TTN               │
-│  2. Mapea el Device EUI → deviceId propio  │
-│  3. Traduce el JSON decodificado a         │
-│     {ph, orp, turbidez, ...} (Variable)    │
-│  4. Resuelve cicloId/etapa activos para    │
-│     la línea de ese dispositivo            │  ← problema abierto, ver 5.4
-│  5. Llama a la misma lógica de             │
-│     ingestLectura (o hace el POST interno) │
-└───────────────────────────────────────────┘
-   ▼
-POST /api/ingest  (formato ya validado en esta sesión)
+ttnUplink (nuevo):
+  1. Valida x-webhook-secret contra process.env.TTN_WEBHOOK_SECRET
+  2. Ignora (200, sin escribir) si fport≠2, dispositivo desconocido, o sin
+     payload decodificado — así TTN no reintenta en loop por errores de negocio
+  3. Mapea end_device_ids.device_id → dispositivos/{deviceId} (mismo id, ver
+     convención de aprovisionamiento en el código)
+  4. Traduce decoded_payload (PH, EC_K1, EC_K10, ORP, dissolved_oxygen,
+     turbidity, temp_DS18B20) a las Variable internas vía BIT_SONDA_LORAWAN
+  5. Resuelve cicloId/etapa (ver 5.4) y llama a procesarLectura()
+     — la misma función que usa ingestLectura, extraída de ingest.ts
 ```
 
-### 5.4 Problema abierto: el sensor no conoce el "ciclo CIP"
+`ingest.ts` se refactorizó: la validación y escritura (rango físico, ciclo, umbrales, batch) quedó en `procesarLectura()`, exportada y reutilizada por ambos endpoints — así el adaptador no duplica reglas de negocio.
 
-El payload del WQS-LB **nunca incluye `cicloId` ni `etapa`** — el dispositivo solo sabe medir agua, no participa del proceso de negocio. El adaptador del punto 5.3 necesita resolver "¿cuál es el ciclo activo y la etapa actual de la línea a la que pertenece este `deviceId`?" antes de poder llamar a `ingestLectura`. Posibles enfoques a evaluar en el próximo sprint:
-- Mantener en `dispositivos/{deviceId}` un puntero `cicloActivoId` que el operador actualiza al iniciar/cambiar de etapa un ciclo, y que el adaptador lee en cada uplink.
-- Que el propio ingest infiera el ciclo "en curso" de la línea del dispositivo (consultando `ciclos` por `lineaId` + `estado: "en_curso"`), evitando mantener el puntero duplicado.
+⚠️ **Sigue sin verificarse contra un payload real de TTN** (no hay cuenta ni gateway). Se probó localmente simulando el body exacto que TTN debería enviar (`scripts/simulador-ttn.js`, `npm run sim:ttn`), contra los emuladores: lectura válida, pH fuera de rango, dispositivo desconocido, FPort≠2, secreto inválido, y sin ciclo en curso — los 6 casos se comportan como se diseñó. Falta confirmar que los nombres de campo (`PH`, `EC_K10`, etc.) sean exactamente los que TTN entrega en producción.
+
+### 5.4 Resolución de `cicloId`/`etapa` ✅
+
+Se implementó la segunda alternativa propuesta: `ttnUplink` consulta `ciclos` por `lineaId == dispositivos[deviceId].lineaId` y `estado == "en_curso"` (sin índice compuesto adicional — dos filtros de igualdad no lo requieren en Firestore), y usa el `etapaActual` de ese ciclo. Si no hay ciclo en curso en la línea, el uplink se ignora (200, sin escribir) — no tiene sentido registrar calidad de agua fuera de un ciclo CIP activo. No se agregó el puntero `cicloActivoId` en `dispositivos` para evitar una segunda fuente de verdad.
+
+**Validado con emuladores**: al cambiar `ciclos/CIP-2026-0001.estado` a `"finalizado"`, el adaptador ignoró correctamente el uplink; al restaurarlo a `"en_curso"`, volvió a procesar y usó el `etapaActual` vigente en ese momento (no un valor fijo).
 
 ### 5.5 Brechas conocidas para el siguiente sprint
-- No hay cuenta de The Things Stack ni gateway LoRaWAN configurado — nada de esto se pudo probar con hardware real.
+- No hay cuenta de The Things Stack ni gateway LoRaWAN configurado — nada de esto se pudo probar con hardware real ni con un payload TTN genuino.
 - El decoder oficial revisado no cubre `cloroResidual` ni `cod`.
 - El intervalo por defecto (20 min) es mucho más lento que los umbrales de proceso pensados para un ciclo CIP (minutos) — evaluar si hay que reconfigurar `AT+TDC` en el dispositivo real.
-- Falta decidir dónde vive el adaptador (¿nueva Cloud Function HTTP, o Pub/Sub trigger si TTN integra vía Google Cloud IoT/Pub-Sub?).
+- `TTN_WEBHOOK_SECRET` se lee como variable de entorno simple (`process.env`); antes de producción migrar a Secret Manager (`defineSecret` de `firebase-functions/params`).
+- Falta configurar el webhook real en la consola de TTN una vez se tenga la cuenta y el dispositivo físico.
 
 ## 6. Pendiente / siguientes pasos
 - Definir umbrales de proceso por etapa para las 4 variables nuevas (orp, oxigenoDisuelto, cloroResidual, cod) junto al cliente (Soprole/Austral Chemicals), igual que se hizo para temperatura/concentración/pH/turbidez.
 - Evaluar si el frontend necesita mostrar la unidad/rango de `CATALOGO_SONDAS` en el dashboard para dar contexto al operador.
-- Implementar el adaptador LoRaWAN→ingest descrito en la sección 5, una vez se resuelvan los puntos 5.2 y 5.4.
+- Conseguir cuenta de The Things Stack + gateway LoRaWAN para validar `ttnUplink` contra un payload real (ver 5.5).
