@@ -2,6 +2,7 @@ export const VARIABLES = [
   "temperatura", "concentracion", "caudal", "presion",
   "ph", "turbidez", "conductividad", "nivel",
   "orp", "oxigenoDisuelto", "cloroResidual", "cod",
+  "ecTemp", "tempExterna",
 ] as const;
 export type Variable = (typeof VARIABLES)[number];
 
@@ -19,33 +20,14 @@ export type Umbrales = Partial<Record<Variable, Rango>>;
 // Sondas Dragino WQS conectadas por RS485 a una unidad WQS-LB (1 a 3 por unidad)
 export const MODELOS_SONDA = [
   "DR-ECK1.0", "DR-ECK10.0", "DR-EC200", "DR-PH01", "DR-ORP1",
-  "DR-DO1", "DR-DO2", "DR-TS200", "DR-TS4000", "DR-CL-2ML", "DR-CL-10ML", "DR-COD",
+  "DR-DO1", "DR-DO2", "DR-TS1", "DR-TS200", "DR-TS4000", "DR-CL-2ML", "DR-CL-10ML", "DR-COD",
+  "DS18B20",
 ] as const;
 export type ModeloSonda = (typeof MODELOS_SONDA)[number];
 
-// Sin "puerto": el protocolo LoRaWAN del WQS-LB identifica sondas por tipo (ver
-// BIT_SONDA_LORAWAN), no por puerto físico libre.
+// Sin "puerto": el protocolo LoRaWAN del WQS-LB identifica sondas por tipo fijo
+// (ver wqsDecoder.ts), no por puerto físico libre.
 export type Sonda = { modelo: ModeloSonda };
-
-// Modelos que el firmware/decoder oficial del WQS-LB realmente reporta por LoRaWAN.
-// DR-EC200, DR-CL-2ML, DR-CL-10ML y DR-COD NO están en el decoder revisado
-// (github.com/dragino/dragino-end-node-decoder, WQS-LB_TTN_Decoder.txt) — podrían
-// requerir otra variante de firmware, a confirmar antes de usarlos en campo.
-export const SOPORTADO_LORAWAN_WQSLB: ModeloSonda[] = [
-  "DR-PH01", "DR-ECK1.0", "DR-ECK10.0", "DR-ORP1", "DR-DO1", "DR-DO2", "DR-TS200", "DR-TS4000",
-];
-
-// Byte de flags (bits 0-5 de bytes[4], FPort=2) del decoder oficial Dragino: indica
-// qué sondas están presentes en cada uplink y con qué nombre aparece el campo ya
-// decodificado por TTN en `uplink_message.decoded_payload`.
-export const BIT_SONDA_LORAWAN: { bit: number; campoDecoder: string; variable: Variable }[] = [
-  { bit: 0, campoDecoder: "PH", variable: "ph" },
-  { bit: 1, campoDecoder: "EC_K1", variable: "conductividad" },
-  { bit: 2, campoDecoder: "EC_K10", variable: "conductividad" },
-  { bit: 3, campoDecoder: "ORP", variable: "orp" },
-  { bit: 4, campoDecoder: "dissolved_oxygen", variable: "oxigenoDisuelto" },
-  { bit: 5, campoDecoder: "turbidity", variable: "turbidez" },
-];
 
 // Rango físico de fábrica por variable (datasheet Dragino) — valida que la lectura sea posible,
 // distinto de `Umbrales` que valida que sea aceptable para el proceso CIP.
@@ -58,7 +40,7 @@ export const CATALOGO_SONDAS: Record<ModeloSonda, Partial<Record<Variable, Espec
   },
   "DR-ECK10.0": {
     conductividad: { unidad: "µS/cm", min: 10, max: 20000, resolucion: 10 },
-    temperatura: { unidad: "°C", min: -20, max: 60, resolucion: 0.1 },
+    ecTemp: { unidad: "°C", min: -20, max: 60, resolucion: 0.1 },
   },
   "DR-EC200": {
     conductividad: { unidad: "µS/cm", min: 1, max: 200000, resolucion: 1 },
@@ -78,6 +60,11 @@ export const CATALOGO_SONDAS: Record<ModeloSonda, Partial<Record<Variable, Espec
   "DR-DO2": {
     oxigenoDisuelto: { unidad: "mg/L", min: 0, max: 20, resolucion: 0.01 },
   },
+  // Rango del manual, sección 4.5.2 ("TS01: 0~1000NTU"); resolución 0.1 porque
+  // el decoder (wqsDecoder) divide el valor crudo por 10.
+  "DR-TS1": {
+    turbidez: { unidad: "NTU", min: 0, max: 1000, resolucion: 0.1 },
+  },
   "DR-TS200": {
     turbidez: { unidad: "NTU", min: 0, max: 200, resolucion: 0.1 },
   },
@@ -93,5 +80,10 @@ export const CATALOGO_SONDAS: Record<ModeloSonda, Partial<Record<Variable, Espec
   "DR-COD": {
     cod: { unidad: "mg/L", min: 0, max: 500, resolucion: 0.1 },
     turbidez: { unidad: "NTU", min: 0, max: 200, resolucion: 0.1 },
+  },
+  // No es una sonda RS485 sino el sensor DS18B20 integrado del WQS-LB (entrada
+  // de temperatura externa opcional). Rango de fábrica del chip DS18B20.
+  "DS18B20": {
+    tempExterna: { unidad: "°C", min: -55, max: 125, resolucion: 0.1 },
   },
 };
