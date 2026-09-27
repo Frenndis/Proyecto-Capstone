@@ -159,7 +159,7 @@ guía paso a paso, con los comandos exactos y qué esperar de cada uno, está en
 
 Este sistema tiene límites conocidos que todavía no están resueltos. El
 detalle completo está en la sección 7 ("Limitaciones y trabajo futuro") de
-`Base de datos/modelo-datos-sensores.md`; en resumen, agrupado en cuatro
+`Base de datos/modelo-datos-sensores.md`; en resumen, agrupado en 5
 temas:
 
 - **El traductor y las versiones de firmware**: hay sondas (cloro, COD, EC de
