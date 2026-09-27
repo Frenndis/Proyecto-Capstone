@@ -3,7 +3,8 @@ process.env.FIRESTORE_EMULATOR_HOST ??= "127.0.0.1:8080";
 process.env.FIREBASE_AUTH_EMULATOR_HOST ??= "127.0.0.1:9099";
 const admin = require("firebase-admin");
 const crypto = require("crypto");
-admin.initializeApp({ projectId: process.env.PROJECT_ID || "stormcip-dev" });
+const { PROJECT_ID } = require("./config");
+admin.initializeApp({ projectId: PROJECT_ID });
 const db = admin.firestore();
 
 (async () => {
