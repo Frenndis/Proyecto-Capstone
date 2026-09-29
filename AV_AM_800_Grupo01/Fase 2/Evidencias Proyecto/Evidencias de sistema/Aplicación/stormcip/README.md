@@ -13,14 +13,18 @@ los emuladores de Firebase, sin cuenta real de The Things Stack.
 
 ## 1) Setup único
 
-En `functions/`, crear un archivo `.env` (no se sube a git) con:
+`TTN_WEBHOOK_SECRET` se define con `defineSecret` (Secret Manager) en
+`lorawanAdapter.ts`, no como variable de entorno plana. En local, el emulador
+de Functions lee el valor desde `functions/.secret.local` (mismo formato
+`CLAVE=valor` que un `.env`; no se sube a git). Crear ese archivo con:
 
 ```
 TTN_WEBHOOK_SECRET=test-secret
 ```
 
 Este valor debe coincidir con el que usa `scripts/simulador-ttn.js` (por
-defecto, también `test-secret`).
+defecto, también `test-secret`). (Para el proyecto real de producción, el
+secreto se configura distinto — ver `DESPLIEGUE.md`.)
 
 Instalar dependencias si no se hizo antes:
 

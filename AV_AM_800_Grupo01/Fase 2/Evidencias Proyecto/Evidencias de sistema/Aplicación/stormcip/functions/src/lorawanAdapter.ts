@@ -1,15 +1,25 @@
 import { onRequest } from "firebase-functions/v2/https";
+import { defineSecret } from "firebase-functions/params";
 import { getFirestore } from "firebase-admin/firestore";
 import { decodeWqs, bytesToHex, LecturaTiempoReal } from "./wqsDecoder";
 import { Variable } from "./types";
 import { procesarLectura } from "./ingest";
 
 /**
+ * Secreto del webhook, vía Secret Manager (no una env var plana). En local,
+ * el emulador lo lee de `functions/.secret.local` (mismo formato CLAVE=valor
+ * que un .env); en producción hay que crearlo una vez con
+ * `firebase functions:secrets:set TTN_WEBHOOK_SECRET --project <id>` antes
+ * del primer deploy (ver DESPLIEGUE.md).
+ */
+const ttnWebhookSecret = defineSecret("TTN_WEBHOOK_SECRET");
+
+/**
  * Webhook de The Things Stack (TTN) para el WQS-LB.
  *
  * Configurar en TTN: Application > Integrations > Webhooks > Add webhook, con:
  *  - URL: esta función (ver firebase.json rewrites, análogo a /api/ingest)
- *  - Header "x-webhook-secret": el valor de la env var TTN_WEBHOOK_SECRET
+ *  - Header "x-webhook-secret": el valor del secreto TTN_WEBHOOK_SECRET
  *
  * Convención de aprovisionamiento: el "Device ID" registrado en TTN debe ser
  * idéntico al id del documento dispositivos/{deviceId} en Firestore.
@@ -22,10 +32,10 @@ import { procesarLectura } from "./ingest";
  * Solo procesa FPort=2 (lectura en tiempo real); FPort 3 (datalog) y 5 (estado)
  * se ignoran, igual que antes.
  */
-export const ttnUplink = onRequest(async (req, res) => {
+export const ttnUplink = onRequest({ secrets: [ttnWebhookSecret] }, async (req, res) => {
   if (req.method !== "POST") { res.status(405).send("Usar POST"); return; }
 
-  const secretEsperado = process.env.TTN_WEBHOOK_SECRET;
+  const secretEsperado = ttnWebhookSecret.value();
   if (!secretEsperado || req.get("x-webhook-secret") !== secretEsperado) {
     res.status(401).json({ error: "Secreto de webhook inválido o no configurado" });
     return;
