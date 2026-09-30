@@ -5,7 +5,7 @@ los emuladores de Firebase, sin cuenta real de The Things Stack.
 
 ## Prerrequisitos
 
-- Node 20+, Firebase CLI (`npm install -g firebase-tools` o `npx firebase-tools`).
+- Node 22+, Firebase CLI (`npm install -g firebase-tools` o `npx firebase-tools`).
 - Java (los emuladores de Firestore/Auth lo necesitan). Si PowerShell no lo
   encuentra en el PATH (`firebase emulators:start` falla con un error de Java
   aunque esté instalado), probar desde `cmd.exe` en vez de PowerShell — puede

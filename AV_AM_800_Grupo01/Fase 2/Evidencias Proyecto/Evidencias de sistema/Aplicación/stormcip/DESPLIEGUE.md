@@ -17,7 +17,7 @@ final).
   Cloud Functions Admin + Cloud Datastore/Firestore + Secret Manager Admin +
   Service Account User.
 - `firebase login` con la cuenta que tiene esos permisos.
-- Node 20 (igual que `functions/package.json`).
+- Node 22 (igual que `functions/package.json`).
 - Antes de cualquier comando: correr `firebase use` (sin argumentos) y
   confirmar que coincide con lo que se espera pasarle a `--project`. Si no
   coincide, no asumir — corregirlo primero (ver nota al final) o simplemente
