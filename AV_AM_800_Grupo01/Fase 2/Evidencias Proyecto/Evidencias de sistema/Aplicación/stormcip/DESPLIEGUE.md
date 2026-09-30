@@ -24,6 +24,28 @@ final).
   seguir pasando `--project stormcip-972bd` explícito en cada comando, que es
   lo que hace este documento.
 
+## Nota: regiones de las funciones (no todas están en la misma)
+
+Tres funciones corren en `southamerica-west1` (Santiago): `ttnUplink`,
+`ingestLectura` y `setUserRole` — las tres son Cloud Functions 2ª
+generación. `onUserCreated` corre en `southamerica-east1` (São Paulo): es
+la única de 1ª generación (usa el trigger `auth.user().onCreate`, que no
+existe en 2ª gen), y `southamerica-west1` no admite 1ª generación. Ver el
+comentario junto a `onUserCreated` en `functions/src/auth.ts`.
+
+⚠️ **Una función mal configurada puede tumbar el deploy de otras, aunque no
+estén nombradas en el `--only`.** Las 4 funciones viven en un solo codebase
+(`functions/src/index.ts`); Firebase CLI carga y evalúa ese archivo completo
+para descubrir todos los triggers **antes** de aplicar el filtro `--only`
+— es decir, `--only functions:ttnUplink,functions:ingestLectura` no evita
+que el CLI también evalúe `onUserCreated`. Si esa evaluación produce una
+región inválida para la generación de alguna función (como pasó con
+`onUserCreated` en `southamerica-west1`), la llamada a `generateUploadUrl`
+puede fallar para todo el codebase, aunque la función mal configurada no
+esté en el `--only`. Por eso, al tocar la región de cualquier función,
+conviene correr `npx tsc --noEmit` y revisar `functions/src/index.ts`
+completo, no solo el archivo de la función que se piensa desplegar.
+
 ## 1) Solo lectura: comparar qué hay desplegado antes de tocar nada
 
 ```
@@ -33,12 +55,12 @@ firebase functions:list --project stormcip-972bd
 Esto lista las funciones que **ya están publicadas** en el proyecto real.
 Compararlo contra lo que existe hoy en `functions/src/index.ts`:
 
-| Función | Tipo | En el código |
-|---|---|---|
-| `ttnUplink` | v2 HTTP | Sí |
-| `ingestLectura` | v2 HTTP | Sí |
-| `setUserRole` | v2 callable | Sí |
-| `onUserCreated` | v1 (auth trigger) | Sí |
+| Función | Tipo | Región | En el código |
+|---|---|---|---|
+| `ttnUplink` | v2 HTTP | `southamerica-west1` | Sí |
+| `ingestLectura` | v2 HTTP | `southamerica-west1` | Sí |
+| `setUserRole` | v2 callable | `southamerica-west1` | Sí |
+| `onUserCreated` | v1 (auth trigger) | `southamerica-east1` | Sí |
 
 Si en el output de `functions:list` aparecen funciones de otros compañeros
 que no están en este listado (por ejemplo, algo de otra rama que ya se
