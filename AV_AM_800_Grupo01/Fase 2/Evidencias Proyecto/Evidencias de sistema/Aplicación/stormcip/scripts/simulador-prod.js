@@ -102,8 +102,11 @@ function lectura(paso) {
         console.error("\n404: revisa que INGEST_URL apunte al proyecto correcto.");
         process.exit(1);
       }
-      if (res.status === 200) ok++;
-      const marca = res.status === 200 ? "ok   " : "FALLA";
+      // procesarLectura responde 201 Created, no 200: comparar con 200 exacto
+      // hacía que una ingesta correcta se reportara como fallo.
+      const aceptada = res.status >= 200 && res.status < 300;
+      if (aceptada) ok++;
+      const marca = aceptada ? "ok   " : "FALLA";
       const hora = new Date(ts).toLocaleTimeString("es-CL");
       console.log(`${marca} ${paso + 1}/${PASOS}  ${hora}  EC=${valores.conductividad} µS/cm  T=${valores.tempEc} °C  turb=${valores.turbidez}  ${res.status} ${cuerpo}`);
     } catch (e) {
