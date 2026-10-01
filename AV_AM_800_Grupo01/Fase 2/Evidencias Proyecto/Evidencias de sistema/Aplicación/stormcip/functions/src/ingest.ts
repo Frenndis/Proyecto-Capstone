@@ -1,85 +1,92 @@
-import { onRequest } from "firebase-functions/v2/https";
+// Filtro de calidad + escritura. Compartido por ingestLectura (HTTP legado)
+// y ttnUplink (webhook LoRaWAN): ambos terminan en procesarLectura().
 import { getFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
-import { createHash } from "crypto";
-import { VARIABLES, ETAPAS, Variable, Etapa, Umbrales } from "./types";
+import {
+  ESQUEMA_VERSION, Etapa, PARAMS_DEFECTO, ParamsCalculo, Umbrales,
+  VARIABLES, Variable, Dispositivo, fueraDeRango, specDe,
+} from "./types";
+import { derivarLectura } from "./calculos";
 
-/**
- * POST /api/ingest   header: x-api-key
- * body: { deviceId, cicloId, etapa, ts?(ms), valores: { temperatura, caudal, ... } }
- * Punto de entrada único para ESP32 / gateway / simulador.
- */
-export const ingestLectura = onRequest(async (req, res) => {
-  if (req.method !== "POST") { res.status(405).json({ error: "Usar POST" }); return; }
+export type ResultadoIngesta =
+  | { ok: true; lecturaId: string; alertas: number; descartadas: Variable[] }
+  | { ok: false; codigo: number; error: string };
 
+export async function procesarLectura(opts: {
+  deviceId: string; dispositivo: Dispositivo; cicloId: string; etapa: Etapa;
+  valores: Record<string, unknown>; ts: Timestamp; lecturaId?: string;
+}): Promise<ResultadoIngesta> {
   const db = getFirestore();
-  const { deviceId, cicloId, etapa, ts, valores } = req.body ?? {};
-  const apiKey = req.get("x-api-key");
+  const { deviceId, dispositivo, cicloId, etapa, valores, ts } = opts;
 
-  if (!deviceId || !cicloId || !etapa || !valores || !apiKey) {
-    res.status(400).json({ error: "Faltan campos: deviceId, cicloId, etapa, valores, x-api-key" });
-    return;
-  }
-  if (!ETAPAS.includes(etapa as Etapa)) {
-    res.status(400).json({ error: `Etapa inválida. Usar: ${ETAPAS.join(", ")}` });
-    return;
-  }
-
-  // 1. Autenticar dispositivo (se guarda solo el hash de la API key)
-  const dev = await db.doc(`dispositivos/${deviceId}`).get();
-  const hash = createHash("sha256").update(apiKey).digest("hex");
-  if (!dev.exists || dev.get("apiKeyHash") !== hash || dev.get("activo") === false) {
-    res.status(401).json({ error: "Dispositivo no autorizado" });
-    return;
-  }
-
-  // 2. Validar valores (solo variables conocidas y numéricas)
+  // 1. Validación: variable conocida + numérica + dentro del rango FÍSICO
+  //    de la sonda. Distinto de los umbrales de proceso (ver 3).
   const limpios: Partial<Record<Variable, number>> = {};
+  const descartadas: Variable[] = [];
   for (const v of VARIABLES) {
-    const n = valores[v];
-    if (n === undefined) continue;
-    if (typeof n !== "number" || !Number.isFinite(n)) {
-      res.status(400).json({ error: `Valor inválido en ${v}` });
-      return;
-    }
+    const n = (valores as any)[v];
+    if (n === undefined || n === null) continue;
+    if (typeof n !== "number" || !Number.isFinite(n)) { descartadas.push(v); continue; }
+    const spec = specDe(v, dispositivo.sondas);
+    if (spec && (n < spec.min || n > spec.max)) { descartadas.push(v); continue; }
     limpios[v] = n;
   }
-  if (Object.keys(limpios).length === 0) {
-    res.status(400).json({ error: "Sin variables válidas" });
-    return;
-  }
+  if (Object.keys(limpios).length === 0)
+    return { ok: false, codigo: 400, error: "Sin variables válidas" };
 
-  // 3. Ciclo y umbrales de la etapa
+  // 2. Ciclo + configuración
   const cicloRef = db.doc(`ciclos/${cicloId}`);
-  const [ciclo, cfg] = await Promise.all([cicloRef.get(), db.doc("configuracion/umbrales").get()]);
-  if (!ciclo.exists) { res.status(404).json({ error: "Ciclo no existe" }); return; }
-  const umbrales = (cfg.get(etapa) ?? {}) as Umbrales;
-  const momento = typeof ts === "number" ? Timestamp.fromMillis(ts) : Timestamp.now();
+  const [ciclo, cfgU, cfgC] = await Promise.all([
+    cicloRef.get(),
+    db.doc("configuracion/umbrales").get(),
+    db.doc("configuracion/calculos").get(),
+  ]);
+  if (!ciclo.exists) return { ok: false, codigo: 404, error: "Ciclo no existe" };
 
-  // 4. Escritura atómica: lectura + estado del ciclo + alertas
+  const umbrales = (cfgU.data() ?? {}) as Umbrales;
+  const params = { ...PARAMS_DEFECTO, ...(cfgC.data() ?? {}) } as ParamsCalculo;
+  const rangos = umbrales[etapa] ?? {};
+
+  // 3. Derivados (cálculo, no medición): cada uno declara método y confianza
+  const { derivados, metodo, confianza } = derivarLectura(limpios, params);
+
   const batch = db.batch();
-  const lecturaRef = cicloRef.collection("lecturas").doc();
-  batch.set(lecturaRef, { ts: momento, etapa, deviceId, ...limpios });
-  batch.update(cicloRef, {
-    etapaActual: etapa,
-    ultimaLectura: { ts: momento, ...limpios },
-    actualizadoEn: FieldValue.serverTimestamp(),
+  const lecturaRef = opts.lecturaId
+    ? cicloRef.collection("lecturas").doc(opts.lecturaId)   // id determinista → idempotente
+    : cicloRef.collection("lecturas").doc();
+
+  batch.set(lecturaRef, {
+    v: ESQUEMA_VERSION, ts, etapa, deviceId,
+    valores: limpios, derivados, metodo, confianza,
   });
 
+  // ultimaLectura por dispositivo: dos equipos no se pisan entre sí
+  batch.set(cicloRef, {
+    etapaActual: etapa,
+    ultimaLectura: { [deviceId]: { ts, valores: limpios, derivados } },
+    actualizadoEn: FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  // 4. Alertas de proceso, deduplicadas: una por ciclo+etapa+variable.
+  //    Mientras la condición persiste se actualiza, no se crea otra.
   let alertas = 0;
-  for (const [v, valor] of Object.entries(limpios) as [Variable, number][]) {
-    const r = umbrales[v];
-    if (!r) continue;
-    const fuera = (r.min !== undefined && valor < r.min) || (r.max !== undefined && valor > r.max);
-    if (!fuera) continue;
-    batch.set(db.collection("alertas").doc(), {
-      cicloId, lineaId: ciclo.get("lineaId") ?? null, etapa, variable: v, valor,
-      min: r.min ?? null, max: r.max ?? null,
-      severidad: "advertencia", ts: momento, reconocida: false,
-    });
+  const evaluables: Record<string, number> = { ...limpios, ...derivados };
+  for (const [v, valor] of Object.entries(evaluables)) {
+    const r = (rangos as any)[v];
+    if (!fueraDeRango(valor, r)) continue;
+    const alertaId = `${cicloId}_${etapa}_${v}`;
+    batch.set(db.doc(`alertas/${alertaId}`), {
+      cicloId, lineaId: ciclo.get("lineaId") ?? null, etapa, variable: v,
+      min: r.min ?? null, max: r.max ?? null, severidad: "advertencia",
+      desde: FieldValue.serverTimestamp(), hasta: ts,
+      ultimoValor: valor, conteo: FieldValue.increment(1), reconocida: false,
+    }, { merge: true });
     alertas++;
   }
-  batch.update(dev.ref, { ultimoPing: FieldValue.serverTimestamp() });
+
+  batch.update(db.doc(`dispositivos/${deviceId}`), {
+    ultimoPing: FieldValue.serverTimestamp(),
+  });
   await batch.commit();
 
-  res.status(201).json({ ok: true, lecturaId: lecturaRef.id, alertas });
-});
+  return { ok: true, lecturaId: lecturaRef.id, alertas, descartadas };
+}

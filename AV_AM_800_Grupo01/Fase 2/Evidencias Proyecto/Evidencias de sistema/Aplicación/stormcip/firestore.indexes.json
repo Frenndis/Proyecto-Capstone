@@ -1,13 +1,30 @@
 {
   "indexes": [
     { "collectionGroup": "ciclos", "queryScope": "COLLECTION",
-      "fields": [{ "fieldPath": "lineaId", "order": "ASCENDING" }, { "fieldPath": "inicio", "order": "DESCENDING" }] },
+      "fields": [{ "fieldPath": "lineaId", "order": "ASCENDING" },
+                 { "fieldPath": "inicio", "order": "DESCENDING" }] },
+    { "collectionGroup": "ciclos", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "estado", "order": "ASCENDING" },
+                 { "fieldPath": "inicio", "order": "DESCENDING" }] },
     { "collectionGroup": "alertas", "queryScope": "COLLECTION",
-      "fields": [{ "fieldPath": "cicloId", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] },
+      "fields": [{ "fieldPath": "cicloId", "order": "ASCENDING" },
+                 { "fieldPath": "hasta", "order": "DESCENDING" }] },
     { "collectionGroup": "alertas", "queryScope": "COLLECTION",
-      "fields": [{ "fieldPath": "reconocida", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "DESCENDING" }] },
+      "fields": [{ "fieldPath": "reconocida", "order": "ASCENDING" },
+                 { "fieldPath": "hasta", "order": "DESCENDING" }] },
     { "collectionGroup": "lecturas", "queryScope": "COLLECTION",
-      "fields": [{ "fieldPath": "etapa", "order": "ASCENDING" }, { "fieldPath": "ts", "order": "ASCENDING" }] }
+      "fields": [{ "fieldPath": "etapa", "order": "ASCENDING" },
+                 { "fieldPath": "ts", "order": "ASCENDING" }] },
+
+    { "_comentario": "COLLECTION_GROUP: histórico entre ciclos (Sprint 5 + dataset ML)",
+      "collectionGroup": "lecturas", "queryScope": "COLLECTION_GROUP",
+      "fields": [{ "fieldPath": "ts", "order": "DESCENDING" }] },
+    { "collectionGroup": "lecturas", "queryScope": "COLLECTION_GROUP",
+      "fields": [{ "fieldPath": "etapa", "order": "ASCENDING" },
+                 { "fieldPath": "ts", "order": "DESCENDING" }] },
+    { "collectionGroup": "lecturas", "queryScope": "COLLECTION_GROUP",
+      "fields": [{ "fieldPath": "deviceId", "order": "ASCENDING" },
+                 { "fieldPath": "ts", "order": "DESCENDING" }] }
   ],
   "fieldOverrides": []
 }
