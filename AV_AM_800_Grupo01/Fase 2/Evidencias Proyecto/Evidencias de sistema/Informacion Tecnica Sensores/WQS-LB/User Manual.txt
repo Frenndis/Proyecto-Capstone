@@ -1,0 +1,1 @@
+See online document: https://wiki.dragino.com/docs/LoRaWAN-End-Node/air-quality-water-quality-environmental/wqs-lb/

@@ -5,8 +5,13 @@ import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { ROLES, Rol } from "./types";
 
 // Todo usuario nuevo parte como "visor" (si no tiene rol asignado ya)
+//
+// Región distinta al resto (southamerica-east1, no -west1): el trigger
+// `auth.user().onCreate` solo existe en Cloud Functions 1ª generación, y
+// southamerica-west1 no admite 1ª generación (solo 2ª gen). No mover esto a
+// Santiago aunque las demás funciones estén ahí.
 export const onUserCreated = functionsV1
-  .region("southamerica-west1")
+  .region("southamerica-east1")
   .auth.user()
   .onCreate(async (user) => {
     const actual = await getAuth().getUser(user.uid);

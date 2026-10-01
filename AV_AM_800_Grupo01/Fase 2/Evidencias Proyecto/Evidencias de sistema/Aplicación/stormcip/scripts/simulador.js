@@ -19,3 +19,21 @@ setInterval(async () => {
     console.log(res.status, await res.text());
   } catch (e) { console.error("Error:", e.message); }
 }, 2000);
+
+// Unidad WQS-LB (sondas DR-PH01, DR-EC200, DR-TS200) cada 3 s.
+setInterval(async () => {
+  const valores = {
+    ph: Math.random() < 0.1 ? 15.2 : r(7.5, 1), // 10% fuera de rango físico → ingest debe rechazar (400)
+    temperatura: r(22, 2),
+    conductividad: r(500, 50),
+    turbidez: r(20, 5),
+  };
+  try {
+    const res = await fetch(URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": "dev-key-wqs-456" },
+      body: JSON.stringify({ deviceId: "wqs-lb-01", cicloId: "CIP-2026-0001", etapa: "enjuague", valores }),
+    });
+    console.log("[WQS]", res.status, await res.text());
+  } catch (e) { console.error("Error WQS:", e.message); }
+}, 3000);

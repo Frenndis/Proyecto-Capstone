@@ -3,14 +3,15 @@
   "functions": [{
     "source": "functions",
     "codebase": "default",
-    "runtime": "nodejs20",
+    "runtime": "nodejs22",
     "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"]
   }],
   "hosting": {
     "public": "web/out",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "rewrites": [
-      { "source": "/api/ingest", "function": { "functionId": "ingestLectura", "region": "southamerica-west1" } }
+      { "source": "/api/ingest", "function": { "functionId": "ingestLectura", "region": "southamerica-west1" } },
+      { "source": "/api/ttn-uplink", "function": { "functionId": "ttnUplink", "region": "southamerica-west1" } }
     ]
   },
   "emulators": {

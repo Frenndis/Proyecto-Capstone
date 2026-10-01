@@ -1,9 +1,9 @@
 // ─────────────────────────────────────────────────────────────
 // Modelo de datos v2 — StormCIP
-// Cambios clave vs v1:
 //  · temperatura genérica → variables separadas por origen
-//  · mediciones anidadas en `valores`, cálculos en `derivados`
+//  · mediciones en `valores`, cálculos en `derivados`
 //  · cada derivado declara método y nivel de confianza
+// Rangos físicos: datasheet/manual Dragino WQS.
 // ─────────────────────────────────────────────────────────────
 
 export const ESQUEMA_VERSION = 2;
@@ -23,16 +23,16 @@ export type Variable = (typeof VARIABLES)[number];
 
 // ── Variables DERIVADAS (las calcula el backend) ──────────────
 export const DERIVADOS = [
-  "conductividad25C",     // conductividad compensada a 25 °C
-  "volumenEstimado",      // m³ acumulados en la etapa (estimación)
-  "tiempoHastaLimpio",    // s hasta cumplir el criterio de agua limpia
+  "conductividad25C",       // conductividad compensada a 25 °C
+  "volumenEstimado",        // m³ acumulados en la etapa (estimación)
+  "tiempoHastaLimpio",      // s hasta cumplir el criterio de agua limpia
   "pendienteConductividad", // µS/cm por minuto: qué tan rápido cae el enjuague
-  "arrastreQuimico",      // conductividad residual del primer enjuague
+  "arrastreQuimico",        // conductividad residual del primer enjuague
 ] as const;
 export type Derivado = (typeof DERIVADOS)[number];
 
-// Cada derivado declara de dónde salió: "medido" (cálculo directo sobre datos
-// reales) o "estimado" (usa un supuesto, p. ej. caudal nominal en vez de medido).
+// "medido" = cálculo directo sobre datos reales.
+// "estimado" = usa un supuesto (p. ej. caudal nominal en vez de medido).
 export type Confianza = "medido" | "estimado";
 
 export const ETAPAS = [
@@ -49,11 +49,13 @@ export const ROLES = ["admin", "operador", "visor"] as const;
 export type Rol = (typeof ROLES)[number];
 
 export type Rango = { min?: number; max?: number };
+// Umbrales de PROCESO, por etapa. Distinto del rango físico de la sonda.
+// La clave interna es string porque también se evalúan derivados (ej. conductividad25C).
 export type Umbrales = Partial<Record<Etapa, Partial<Record<string, Rango>>>>;
 
 // ── Catálogo de sondas (spec de hardware, NO va en Firestore) ─
-// Fuente: datasheet Dragino WQS. Son cotas físicas: un valor fuera de
-// este rango es una falla de sensor, no una alerta de proceso.
+// Cotas físicas de fábrica: un valor fuera de este rango es una falla de
+// sensor, no una alerta de proceso.
 export type SpecVariable = {
   unidad: string; min: number; max: number; resolucion: number;
   tempMaxOperacion?: number; // límite de la sonda, no del proceso
@@ -87,7 +89,9 @@ export const CATALOGO_SONDAS: Record<ModeloSonda, Partial<Record<Variable, SpecV
     tempSonda:       { unidad: "°C", min: 0, max: 50, resolucion: 0.01 },
   },
   "DR-DO2":     { oxigenoDisuelto: { unidad: "mg/L", min: 0, max: 20, resolucion: 0.01 } },
-  "DR-TS1":     { turbidez: { unidad: "NTU", min: 0, max: 200, resolucion: 0.1, tempMaxOperacion: 40 } },
+  // Rango del manual, sección 4.5.2 ("TS01: 0~1000NTU"); resolución 0.1 porque
+  // el decoder (wqsDecoder) divide el valor crudo por 10.
+  "DR-TS1":     { turbidez: { unidad: "NTU", min: 0, max: 1000, resolucion: 0.1, tempMaxOperacion: 40 } },
   "DR-TS200":   { turbidez: { unidad: "NTU", min: 0, max: 200, resolucion: 0.1, tempMaxOperacion: 40 } },
   "DR-TS4000":  { turbidez: { unidad: "NTU", min: 0, max: 4000, resolucion: 1, tempMaxOperacion: 40 } },
   "DR-CL-2ML":  { cloroResidual: { unidad: "mg/L", min: 0, max: 2, resolucion: 0.01 } },
@@ -96,6 +100,8 @@ export const CATALOGO_SONDAS: Record<ModeloSonda, Partial<Record<Variable, SpecV
     cod:      { unidad: "mg/L", min: 0, max: 500, resolucion: 0.1, tempMaxOperacion: 40 },
     turbidez: { unidad: "NTU", min: 0, max: 200, resolucion: 0.1, tempMaxOperacion: 40 },
   },
+  // No es una sonda RS485 sino el DS18B20 integrado del WQS-LB (entrada de
+  // temperatura externa opcional). Rango de fábrica del chip.
   "DS18B20":    { tempExterna: { unidad: "°C", min: -55, max: 125, resolucion: 0.1 } },
 };
 
@@ -105,8 +111,12 @@ export const MODELOS_DECODIFICABLES: ModeloSonda[] = [
 ];
 
 // ── Documentos de Firestore ───────────────────────────────────
-export type Sonda = { sondaId: string; modelo: ModeloSonda; activa: boolean;
-  ultimaCalibracion?: any; notas?: string };
+// Sin "puerto": el protocolo LoRaWAN del WQS-LB identifica sondas por tipo fijo
+// (ver wqsDecoder.ts), no por puerto físico libre.
+export type Sonda = {
+  sondaId: string; modelo: ModeloSonda; activa: boolean;
+  ultimaCalibracion?: any; notas?: string;
+};
 
 export type Dispositivo = {
   plantaId: string; lineaId: string; tipo: string; activo: boolean;
@@ -120,9 +130,10 @@ export type Dispositivo = {
 export type Lectura = {
   v: number;                                  // versión de esquema
   ts: any; etapa: Etapa; deviceId: string;
-  valores: Partial<Record<Variable, number>>;     // medido
-  derivados?: Partial<Record<Derivado, number>>;  // calculado
-  metodo?: Partial<Record<Derivado, string>>;     // fórmula/supuesto usado
+  // null = sensor no conectado (centinela del DS18B20), no dato inválido
+  valores: Partial<Record<Variable, number | null>>;
+  derivados?: Partial<Record<Derivado, number>>;
+  metodo?: Partial<Record<Derivado, string>>;
   confianza?: Partial<Record<Derivado, Confianza>>;
 };
 
@@ -130,7 +141,7 @@ export type Ciclo = {
   plantaId: string; lineaId: string; camion: string; programa: string;
   estado: "en_curso" | "finalizado" | "abortado";
   etapaActual: Etapa; inicio: any; fin?: any;
-  ultimaLectura?: Record<string, { ts: any; valores: Record<string, number> }>; // por deviceId
+  ultimaLectura?: Record<string, { ts: any; valores: Record<string, number | null> }>; // por deviceId
   indicadores?: Partial<Record<Derivado, number>>;
   consumos?: { aguaTotal?: number; aguaRecuperada?: number; soda?: number; acido?: number };
 };
@@ -155,7 +166,7 @@ export function fueraDeRango(valor: number, r?: Rango) {
   return (r.min !== undefined && valor < r.min) || (r.max !== undefined && valor > r.max);
 }
 
-// Devuelve la spec física de una variable según las sondas del dispositivo
+// Devuelve la spec física de una variable según las sondas ACTIVAS del equipo
 export function specDe(variable: Variable, sondas?: Record<string, Sonda>) {
   if (!sondas) return undefined;
   for (const s of Object.values(sondas)) {

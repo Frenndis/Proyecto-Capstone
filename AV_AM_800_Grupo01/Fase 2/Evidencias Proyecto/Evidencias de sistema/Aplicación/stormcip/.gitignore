@@ -3,5 +3,8 @@ functions/lib/
 web/.next/
 web/out/
 .env*
+.env.local
+.secret.local
 *-debug.log
 serviceAccount*.json
+*.tmp

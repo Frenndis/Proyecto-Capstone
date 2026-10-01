@@ -3,7 +3,8 @@ process.env.FIRESTORE_EMULATOR_HOST ??= "127.0.0.1:8080";
 process.env.FIREBASE_AUTH_EMULATOR_HOST ??= "127.0.0.1:9099";
 const admin = require("firebase-admin");
 const crypto = require("crypto");
-admin.initializeApp({ projectId: process.env.PROJECT_ID || "stormcip-dev" });
+const { PROJECT_ID } = require("./config");
+admin.initializeApp({ projectId: PROJECT_ID });
 const db = admin.firestore();
 
 (async () => {
@@ -15,6 +16,20 @@ const db = admin.firestore();
   await db.doc("dispositivos/esp32-01").set({
     plantaId: "frutillar", lineaId: "cip-01", tipo: "esp32", activo: true,
     apiKeyHash: crypto.createHash("sha256").update("dev-key-123").digest("hex"),
+  });
+
+  // Unidad WQS-LB con firmware 1.2 (formato B del decoder propio, wqsDecoder.ts) y
+  // las 3 sondas RS485 configuradas + el DS18B20 externo integrado del transmisor.
+  await db.doc("dispositivos/wqs-lb-01").set({
+    plantaId: "frutillar", lineaId: "cip-01", tipo: "wqs-lb", activo: true,
+    apiKeyHash: crypto.createHash("sha256").update("dev-key-wqs-456").digest("hex"),
+    firmware: "1.2",
+    sondas: [
+      { modelo: "DR-PH01" },
+      { modelo: "DR-ECK10.0" },
+      { modelo: "DR-TS1" },
+      { modelo: "DS18B20" },
+    ],
   });
 
   // Rangos tomados de la presentación (ácido ±5 °C es supuesto, validar con cliente)
@@ -48,6 +63,6 @@ const db = admin.firestore();
   await admin.auth().setCustomUserClaims(user.uid, { rol: "admin" });
   await db.doc(`users/${user.uid}`).set({ email: user.email, nombre: "Admin", rol: "admin" });
 
-  console.log("Seed OK -> admin@stormcip.dev / admin123 | device esp32-01 / dev-key-123");
+  console.log("Seed OK -> admin@stormcip.dev / admin123 | esp32-01/dev-key-123 | wqs-lb-01/dev-key-wqs-456");
   process.exit(0);
 })();

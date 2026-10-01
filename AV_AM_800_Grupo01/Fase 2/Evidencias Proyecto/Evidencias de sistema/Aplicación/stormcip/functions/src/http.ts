@@ -43,6 +43,6 @@ export const ingestLectura = onRequest(async (req, res) => {
   if (!r.ok) { res.status(r.codigo).json({ error: r.error }); return; }
   res.status(201).json({
     ok: true, lecturaId: r.lecturaId, alertas: r.alertas,
-    descartadas: r.descartadas,   // variables rechazadas por rango físico
+    descartadas: r.descartadas,   // variable -> motivo del descarte
   });
 });
