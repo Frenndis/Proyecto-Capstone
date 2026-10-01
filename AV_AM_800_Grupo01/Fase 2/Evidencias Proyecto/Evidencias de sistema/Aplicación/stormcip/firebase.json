@@ -9,6 +9,8 @@
   "hosting": {
     "public": "web/out",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "// cleanUrls": "El export estatico de Next emite dashboard.html y login.html en la raiz, no dashboard/index.html. Sin cleanUrls, Hosting no mapea /dashboard a dashboard.html y devuelve 404 al recargar la pagina o al entrar directo por URL.",
+    "cleanUrls": true,
     "rewrites": [
       { "source": "/api/ingest", "function": { "functionId": "ingestLectura", "region": "southamerica-west1" } },
       { "source": "/api/ttn-uplink", "function": { "functionId": "ttnUplink", "region": "southamerica-west1" } }
