@@ -30,6 +30,14 @@ service cloud.firestore {
         allow write: if false;
       }
     }
+    // Consulta de GRUPO de colección: el histórico entre ciclos del dashboard
+    // (collectionGroup('lecturas')) NO se evalúa con la regla anidada de arriba,
+    // necesita esta regla propia. Sin ella la query falla con permission-denied
+    // aunque el usuario pueda leer cada ciclo por separado.
+    match /{path=**}/lecturas/{lecturaId} {
+      allow read: if canRead();
+      allow write: if false;
+    }
     match /alertas/{alertaId} {
       allow read: if canRead();
       // Operador solo puede "reconocer" la alerta

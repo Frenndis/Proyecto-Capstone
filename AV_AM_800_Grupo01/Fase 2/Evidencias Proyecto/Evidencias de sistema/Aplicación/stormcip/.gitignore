@@ -2,6 +2,7 @@ node_modules/
 functions/lib/
 web/.next/
 web/out/
+.firebase/
 .env*
 .env.local
 .secret.local

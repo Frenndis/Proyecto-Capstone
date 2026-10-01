@@ -16,7 +16,7 @@
       "fields": [{ "fieldPath": "etapa", "order": "ASCENDING" },
                  { "fieldPath": "ts", "order": "ASCENDING" }] },
 
-    { "_comentario": "COLLECTION_GROUP: histórico entre ciclos (Sprint 5 + dataset ML)",
+    { "_comentario": "COLLECTION_GROUP: histórico entre ciclos (Sprint 5 + dataset ML). Un orderBy('ts') sobre collectionGroup('lecturas') NO usa índice automático: los single-field solo se crean solos en scope COLLECTION.",
       "collectionGroup": "lecturas", "queryScope": "COLLECTION_GROUP",
       "fields": [{ "fieldPath": "ts", "order": "DESCENDING" }] },
     { "collectionGroup": "lecturas", "queryScope": "COLLECTION_GROUP",
