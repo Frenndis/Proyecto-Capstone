@@ -9,3 +9,5 @@ setGlobalOptions({ region: "southamerica-west1", maxInstances: 10 });
 export { ingestLectura } from "./http";
 export { ttnUplink } from "./lorawanAdapter";
 export { onUserCreated, setUserRole } from "./auth";
+// Cierre de ciclo: invoca derivarCiclo() y deja los indicadores en el documento.
+export { alCerrarCiclo, recalcularIndicadores } from "./ciclos";

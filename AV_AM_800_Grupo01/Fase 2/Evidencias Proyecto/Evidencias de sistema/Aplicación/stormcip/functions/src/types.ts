@@ -142,7 +142,19 @@ export type Ciclo = {
   estado: "en_curso" | "finalizado" | "abortado";
   etapaActual: Etapa; inicio: any; fin?: any;
   ultimaLectura?: Record<string, { ts: any; valores: Record<string, number | null> }>; // por deviceId
+  // Indicadores agregados: los escribe alCerrarCiclo (ciclos.ts) al finalizar.
   indicadores?: Partial<Record<Derivado, number>>;
+  indicadoresMetodo?: Partial<Record<Derivado, string>>;
+  indicadoresConfianza?: Partial<Record<Derivado, Confianza>>;
+  indicadoresPorEtapa?: Partial<Record<Etapa, {
+    derivados: Partial<Record<Derivado, number>>;
+    metodo: Partial<Record<Derivado, string>>;
+    confianza: Partial<Record<Derivado, Confianza>>;
+  }>>;
+  lecturasConsideradas?: number;
+  indicadoresCalculadosEn?: any;
+  /** Bandera de mantenimiento: dispara el recálculo y la borra el trigger. */
+  recalcular?: boolean;
   consumos?: { aguaTotal?: number; aguaRecuperada?: number; soda?: number; acido?: number };
 };
 
