@@ -97,6 +97,21 @@ export function useAlertas(n = 15) {
   return alertas;
 }
 
+// Historial completo (reconocidas y no reconocidas, de todos los ciclos),
+// a diferencia de useAlertas() que solo muestra lo pendiente. Sin `where`:
+// cubierto por el índice automático de campo simple de Firestore, no hace
+// falta agregar nada a firestore.indexes.json.
+export function useHistorialAlertas(n = 30) {
+  const [alertas, setAlertas] = useState<Alerta[]>([]);
+  useEffect(() => {
+    const q = query(collection(db, "alertas"), orderBy("hasta", "desc"), limit(n));
+    return onSnapshot(q, (s) =>
+      setAlertas(s.docs.map((d) => ({ id: d.id, ...d.data() } as Alerta)))
+    );
+  }, [n]);
+  return alertas;
+}
+
 export function useUmbrales() {
   const [umbrales, setUmbrales] = useState<Umbrales>({});
   useEffect(() => onSnapshot(doc(db, "configuracion/umbrales"),

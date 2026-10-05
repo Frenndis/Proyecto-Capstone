@@ -3,11 +3,13 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import {
-  useAlertas, useCicloMostrado, useLecturas, useUmbrales, ultimaLecturaReciente,
+  useAlertas, useCicloMostrado, useHistorialAlertas, useLecturas, useUmbrales,
+  ultimaLecturaReciente,
 } from "@/hooks/useDatosCip";
 import TarjetaVariable from "@/components/TarjetaVariable";
 import GraficoTendencia from "@/components/GraficoTendencia";
 import PanelAlertas from "@/components/PanelAlertas";
+import HistorialAlertas from "@/components/HistorialAlertas";
 import IndicadoresCiclo from "@/components/IndicadoresCiclo";
 import { ETAPAS_MONITOREADAS, ETAPA_LABEL, META } from "@/lib/tipos";
 
@@ -25,6 +27,7 @@ export default function Dashboard() {
   const { ciclo, enVivo, cargando: cargandoCiclo } = useCicloMostrado();
   const lecturas = useLecturas(ciclo?.id);
   const alertas = useAlertas();
+  const historialAlertas = useHistorialAlertas();
   const umbrales = useUmbrales();
   const [grafico, setGrafico] = useState("conductividad25C");
 
@@ -122,6 +125,11 @@ export default function Dashboard() {
       <section className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
         <h2 className="mb-3 font-medium">Alertas activas</h2>
         <PanelAlertas alertas={alertas} />
+      </section>
+
+      <section className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+        <h2 className="mb-3 font-medium">Historial de alertas</h2>
+        <HistorialAlertas alertas={historialAlertas} />
       </section>
     </main>
   );
