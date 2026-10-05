@@ -5,6 +5,7 @@
   "engines": { "node": "22" },
   "scripts": {
     "build": "tsc",
+    "build:watch": "tsc --watch --preserveWatchOutput",
     "serve": "npm run build && firebase emulators:start",
     "test": "vitest run"
   },

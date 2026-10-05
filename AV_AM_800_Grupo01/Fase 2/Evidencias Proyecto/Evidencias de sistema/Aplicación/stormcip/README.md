@@ -5,7 +5,8 @@ los emuladores de Firebase, sin cuenta real de The Things Stack.
 
 ## Prerrequisitos
 
-- Node 22+, Firebase CLI (`npm install -g firebase-tools` o `npx firebase-tools`).
+- Node 22 (ver `.nvmrc` en esta carpeta; con nvm: `nvm use`), Firebase CLI
+  (`npm install -g firebase-tools` o `npx firebase-tools`).
 - Java (los emuladores de Firestore/Auth lo necesitan). Si PowerShell no lo
   encuentra en el PATH (`firebase emulators:start` falla con un error de Java
   aunque esté instalado), probar desde `cmd.exe` en vez de PowerShell — puede
@@ -38,12 +39,31 @@ cd ..\scripts; npm install
 **Desde `stormcip/`** (la carpeta con `firebase.json`), no desde `functions/`:
 
 ```powershell
+cd functions; npm run build; cd ..
 firebase emulators:start --project stormcip-dev
 ```
 
 No usar `npm run serve` dentro de `functions/` para esto: solo levanta el
 emulador de Functions, no Firestore/Auth/UI que también hacen falta para la
 prueba completa.
+
+**`npm run build` es obligatorio antes de levantar los emuladores**, y hay que
+repetirlo cada vez que cambie algo en `functions/src/`. El emulador de
+Functions vigila esa carpeta y recarga ("Serving at port...") en cuanto
+detecta un cambio, pero **recarga el `lib/` compilado, no recompila el
+TypeScript** — si editaste `.ts` y no corriste `build`, el log hace parecer
+que tomó el cambio y en realidad sigue sirviendo código viejo, sin ningún
+error visible. (Así se armó un bug real: `ultimaLectura` quedaba en formato
+v1 porque `lib/` tenía semanas de atraso respecto a `src/`.)
+
+Para desarrollo activo sobre `functions/`, correr en una terminal aparte:
+
+```powershell
+cd functions; npm run build:watch
+```
+
+Eso recompila automáticamente en cada guardado, para que el `lib/` que usa el
+emulador nunca quede desactualizado.
 
 El proyecto (`stormcip-dev`) tiene que coincidir con el que usan
 `scripts/seed.js` y `scripts/simulador-ttn.js` (`scripts/config.js` es la

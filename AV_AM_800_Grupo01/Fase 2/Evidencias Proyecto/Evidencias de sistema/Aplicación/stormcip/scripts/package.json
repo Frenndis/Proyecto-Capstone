@@ -1,6 +1,7 @@
 {
   "name": "stormcip-scripts",
   "private": true,
+  "engines": { "node": "22" },
   "scripts": { "seed": "node seed.js", "sim": "node simulador.js", "sim:ttn": "node simulador-ttn.js" },
   "dependencies": { "firebase-admin": "^12.7.0" }
 }
