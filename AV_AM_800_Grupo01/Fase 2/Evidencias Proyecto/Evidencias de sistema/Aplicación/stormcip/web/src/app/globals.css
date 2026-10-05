@@ -1,26 +1,18 @@
 @import "tailwindcss";
+/* La paleta se define una sola vez en styles/tokens.css. */
+@import "../styles/tokens.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
+/* Expone los tokens a las utilidades de Tailwind (bg-background, etc.). */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-background: var(--bg-main);
+  --color-foreground: var(--text-main);
+  --color-accent: var(--accent);
+  --color-estimado: var(--estimado);
+  --color-alerta: var(--alerta);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg-main);
+  color: var(--text-main);
+  font-family: var(--font-sans);
 }

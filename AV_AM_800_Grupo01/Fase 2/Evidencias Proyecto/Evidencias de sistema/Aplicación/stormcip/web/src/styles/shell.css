@@ -1,0 +1,173 @@
+/* Armazon del panel: sidebar fijo + header + area de contenido.
+   Los colores y medidas vienen de styles/tokens.css. */
+
+.shell {
+  display: flex;
+  min-height: 100vh;
+  background: var(--bg-main);
+  color: var(--text-main);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.shell *, .shell *::before, .shell *::after { box-sizing: border-box; }
+
+.shell-mono { font-family: var(--font-mono); }
+
+.shell-micro {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* ---------- Sidebar ---------- */
+
+.shell-sidebar {
+  width: var(--sidebar-w);
+  flex: 0 0 var(--sidebar-w);
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 16px 14px;
+}
+
+.shell-brand { display: flex; align-items: center; gap: 10px; }
+.shell-brand-name { font-size: 16px; font-weight: 600; }
+.shell-brand-sub {
+  font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--text-muted); margin-top: 1px;
+}
+
+.shell-nav { display: flex; flex-direction: column; gap: 2px; }
+.shell-nav > .shell-micro { margin-bottom: 6px; }
+
+.shell-navitem {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.shell-navitem:hover { background: var(--bg-panel-soft); color: var(--text-main); }
+.shell-navitem.is-active {
+  background: var(--bg-panel);
+  border-color: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* Reserva el alto del item mientras el rol todavia no resolvio, para que la
+   navegacion no salte cuando aparece "Configuracion". */
+.shell-navitem-skeleton {
+  height: 35px;
+  border-radius: 5px;
+  background: var(--bg-panel-soft);
+  opacity: 0.45;
+}
+
+.shell-sidebar-foot { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
+.shell-copyright { font-size: 10px; color: var(--text-muted); }
+
+/* ---------- Header ---------- */
+
+.shell-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+
+.shell-header {
+  height: var(--header-h);
+  flex: 0 0 var(--header-h);
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-sidebar);
+}
+.shell-header-title { display: flex; align-items: baseline; gap: 8px; }
+.shell-header-title b { font-size: 14px; font-weight: 600; }
+.shell-header-title span { font-size: 12px; color: var(--text-secondary); }
+
+/* ---------- Indicador de conexion ---------- */
+
+.shell-conn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-panel);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.shell-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted); }
+.shell-conn.is-online .shell-dot { background: var(--ok); }
+.shell-conn.is-offline .shell-dot { background: var(--alerta); }
+.shell-conn.is-offline { color: var(--alerta); border-color: var(--alerta); }
+
+/* ---------- Contenido ---------- */
+
+.shell-content {
+  flex: 1 1 auto;
+  padding: var(--pad);
+  display: flex; flex-direction: column; gap: 14px;
+}
+
+.shell-page-title { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.shell-page-title h1 { margin: 0; font-size: 20px; font-weight: 600; }
+.shell-page-title p { margin: 0; font-size: 12px; color: var(--text-secondary); }
+
+/* Subdivision 75/25 del area de contenido (se usa en las fases siguientes). */
+.shell-split { display: grid; grid-template-columns: 3fr 1fr; gap: 12px; align-items: start; }
+.shell-split-aside { display: flex; flex-direction: column; gap: 12px; }
+
+/* Placeholder de las vistas que todavia no tienen contenido. */
+.shell-placeholder {
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  background: var(--bg-panel);
+  padding: 28px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* ---------- Estado de carga del guard de rol ---------- */
+
+.shell-loading {
+  flex: 1 1 auto;
+  display: flex; align-items: center; justify-content: center;
+  gap: 10px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.shell-spinner {
+  width: 14px; height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: shell-spin 0.8s linear infinite;
+}
+@keyframes shell-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .shell-spinner { animation-duration: 2.4s; } }
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 1200px) {
+  .shell-split { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 860px) {
+  .shell { flex-direction: column; }
+  .shell-sidebar {
+    width: 100%; flex: none;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .shell-content { padding: 18px; }
+}
