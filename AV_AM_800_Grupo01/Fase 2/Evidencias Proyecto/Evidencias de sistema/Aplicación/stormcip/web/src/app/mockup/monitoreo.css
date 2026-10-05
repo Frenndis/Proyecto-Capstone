@@ -1,0 +1,277 @@
+/* Estilos de la maqueta de monitoreo CIP (SCADA/HMI oscuro). La paleta vive en
+   src/styles/tokens.css: aqui no se definen colores.
+   Todo queda bajo .cip-root para no afectar al resto de la aplicacion. */
+
+.cip-root {
+  font-family: var(--font-sans);
+  display: flex;
+  min-height: 100vh;
+  background: var(--bg-main);
+  color: var(--text-main);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.cip-root *, .cip-root *::before, .cip-root *::after { box-sizing: border-box; }
+
+.cip-mono { font-family: var(--font-mono); }
+
+.cip-micro {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* ---------- Sidebar ---------- */
+
+.cip-sidebar {
+  width: var(--sidebar-w);
+  flex: 0 0 var(--sidebar-w);
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 16px 14px;
+  gap: 18px;
+}
+
+.cip-brand { display: flex; align-items: center; gap: 10px; }
+.cip-brand svg { color: var(--cyan); flex: 0 0 auto; }
+.cip-brand-name { font-size: 16px; font-weight: 600; letter-spacing: 0.01em; }
+.cip-brand-sub {
+  font-size: 9px; letter-spacing: 0.16em; color: var(--text-muted);
+  text-transform: uppercase; margin-top: 1px;
+}
+
+.cip-client {
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  border-radius: 5px;
+  padding: 10px 11px;
+}
+.cip-client-name { font-size: 13px; font-weight: 600; margin: 6px 0 4px; }
+.cip-client-detail { font-size: 11px; color: var(--text-secondary); line-height: 1.45; }
+
+.cip-navgroup { display: flex; flex-direction: column; gap: 2px; }
+.cip-navgroup > .cip-micro { margin-bottom: 6px; }
+
+.cip-navitem {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: 5px;
+  color: var(--text-secondary); font-size: 13px;
+  border: 1px solid transparent;
+  background: none; width: 100%; text-align: left; cursor: pointer;
+  font-family: inherit;
+}
+.cip-navitem:hover { background: var(--bg-panel-soft); color: var(--text-main); }
+.cip-navitem svg { flex: 0 0 auto; color: var(--text-muted); }
+.cip-navitem.is-active {
+  background: #12304a; border-color: #1d4a6e; color: var(--text-main);
+}
+.cip-navitem.is-active svg { color: var(--cyan); }
+.cip-badge-alert {
+  margin-left: auto; background: #3b2e10; color: var(--yellow);
+  font-size: 10px; border-radius: 999px; padding: 1px 7px; line-height: 1.5;
+}
+
+.cip-sidebar-foot { margin-top: auto; display: flex; flex-direction: column; gap: 10px; }
+.cip-line-state {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.cip-demo-box {
+  border: 1px dashed var(--border); border-radius: 4px;
+  padding: 8px; text-align: center; line-height: 1.5;
+}
+.cip-copyright { font-size: 10px; color: var(--text-muted); }
+
+/* ---------- Estructura principal ---------- */
+
+.cip-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+
+.cip-header {
+  height: var(--header-h); flex: 0 0 var(--header-h);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 24px; gap: 16px;
+}
+.cip-breadcrumb {
+  font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--text-muted);
+}
+.cip-breadcrumb b { color: var(--text-secondary); font-weight: 500; }
+.cip-header-right { display: flex; align-items: center; gap: 18px; font-size: 12px; }
+.cip-header-date { color: var(--text-secondary); }
+.cip-clock { font-size: 14px; letter-spacing: 0.04em; }
+
+.cip-chip {
+  display: inline-flex; align-items: center; gap: 7px;
+  border: 1px solid var(--green-dark); background: #0a2b2a;
+  color: var(--green); border-radius: 4px; padding: 4px 9px;
+  font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+}
+.cip-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+.cip-content {
+  flex: 1 1 auto; padding: var(--pad);
+  display: flex; flex-direction: column; gap: 14px;
+}
+
+.cip-page-title { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.cip-page-title h1 { font-size: 20px; font-weight: 600; margin: 0; }
+.cip-page-title p { margin: 0; font-size: 12px; color: var(--text-secondary); }
+
+/* ---------- Panel generico ---------- */
+
+.cip-panel {
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.cip-panel-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 16px; border-bottom: 1px solid var(--border-soft);
+}
+.cip-panel-head h2 { font-size: 13px; font-weight: 600; margin: 0; }
+.cip-spacer { margin-left: auto; }
+
+/* ---------- Resumen del ciclo ---------- */
+
+.cip-summary {
+  display: grid; grid-template-columns: 1.1fr 2fr 1fr;
+  gap: 24px; padding: 14px 20px; align-items: center;
+}
+.cip-cycle-id { font-size: 26px; letter-spacing: 0.02em; margin: 4px 0 8px; }
+.cip-cycle-meta {
+  display: flex; flex-wrap: wrap; gap: 14px; font-size: 11px;
+  color: var(--text-muted);
+}
+.cip-cycle-meta b { color: var(--text-main); font-weight: 500; }
+.cip-cycle-meta .cip-k { letter-spacing: 0.08em; text-transform: uppercase; }
+
+.cip-stage-head { display: flex; align-items: baseline; gap: 10px; }
+.cip-stage-head h3 { font-size: 14px; font-weight: 600; margin: 0; }
+.cip-stage-head span { font-size: 11px; color: var(--text-muted); }
+.cip-stage-pct { margin-left: auto; font-size: 11px; color: var(--cyan); }
+
+.cip-stage-bar { display: grid; gap: 4px; margin-top: 10px; }
+.cip-stage-seg { height: 6px; border-radius: 2px; background: #15293c; overflow: hidden; }
+.cip-stage-seg.done { background: var(--cyan-soft); }
+.cip-stage-seg > i { display: block; height: 100%; background: var(--cyan); }
+.cip-stage-labels {
+  display: grid; margin-top: 6px;
+  font-size: 9px; letter-spacing: 0.08em; color: var(--text-muted);
+}
+.cip-stage-labels span.is-active { color: var(--cyan); }
+
+.cip-timers { display: flex; gap: 26px; justify-content: flex-end; }
+.cip-timer-value { font-size: 24px; letter-spacing: 0.01em; margin-top: 4px; }
+.cip-timer-value small { font-size: 12px; color: var(--text-secondary); margin-left: 4px; }
+
+/* ---------- KPI ---------- */
+
+.cip-kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+.cip-kpi {
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 6px; padding: 11px 13px;
+}
+.cip-kpi.is-warn { border-color: #5a4a18; }
+.cip-kpi-head { display: flex; align-items: center; gap: 8px; }
+.cip-kpi-code {
+  margin-left: auto; font-size: 9px; color: var(--text-muted);
+  border: 1px solid var(--border); border-radius: 3px; padding: 1px 5px;
+}
+.cip-kpi-value { font-size: 24px; margin: 7px 0 9px; letter-spacing: -0.01em; }
+.cip-kpi-value small { font-size: 11px; color: var(--text-secondary); margin-left: 3px; }
+.cip-kpi-foot { display: flex; align-items: center; gap: 8px; font-size: 10px; color: var(--text-muted); }
+
+.cip-tag {
+  font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase;
+  border-radius: 3px; padding: 2px 6px; white-space: nowrap;
+  border: 1px solid var(--green-dark); background: #0a2622; color: var(--green);
+}
+.cip-tag-cyan { border-color: #10465e; background: #09253a; color: var(--cyan); }
+.cip-tag-yellow { border-color: #4b3a12; background: #2a2210; color: var(--yellow); }
+.cip-tag-red { border-color: #5a2130; background: #2d1119; color: var(--red); }
+.cip-tag-magenta { border-color: #53203a; background: #2c1220; color: var(--magenta); }
+.cip-tag-muted { border-color: var(--border); background: transparent; color: var(--text-muted); }
+
+/* ---------- Grid inferior ---------- */
+
+.cip-grid { display: grid; grid-template-columns: 3fr 1fr; gap: 12px; align-items: start; }
+.cip-col-right { display: flex; flex-direction: column; gap: 12px; }
+
+/* ---------- Diagrama ---------- */
+
+.cip-diagram { padding: 6px 10px 0; }
+.cip-diagram svg { width: 100%; height: auto; display: block; }
+.cip-legend {
+  display: flex; flex-wrap: wrap; gap: 18px; align-items: center;
+  border-top: 1px solid var(--border-soft);
+  padding: 9px 16px; font-size: 9px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--text-muted);
+}
+.cip-legend i { display: inline-block; width: 18px; height: 0; vertical-align: middle; margin-right: 6px; }
+.cip-legend .l-ida { border-top: 2px solid var(--line-light); }
+.cip-legend .l-ret { border-top: 2px solid var(--line-return); }
+.cip-legend .l-dre { border-top: 2px dashed var(--text-muted); }
+
+/* ---------- Calidad del retorno ---------- */
+
+.cip-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 13px 16px; }
+.cip-pair-value { font-size: 22px; margin-top: 4px; }
+.cip-pair-value small { font-size: 11px; color: var(--text-secondary); margin-left: 3px; }
+
+.cip-trend { padding: 0 16px 12px; }
+.cip-trend svg { width: 100%; height: auto; display: block; margin: 8px 0 4px; }
+.cip-trend-axis {
+  display: flex; justify-content: space-between; font-size: 9px;
+  letter-spacing: 0.06em; color: var(--text-muted); text-transform: uppercase;
+}
+
+.cip-note {
+  margin: 0 16px 14px; border: 1px solid var(--green-dark);
+  background: #0a211f; border-radius: 4px; padding: 10px 12px;
+}
+.cip-note-title {
+  display: flex; align-items: center; gap: 7px; color: var(--green);
+  font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+}
+.cip-note p { margin: 6px 0 0; font-size: 11px; color: var(--text-secondary); line-height: 1.5; }
+
+/* ---------- Consumo ---------- */
+
+.cip-consumo { padding: 4px 16px 10px; }
+.cip-consumo-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 0; border-bottom: 1px solid var(--border-soft);
+  font-size: 12px;
+}
+.cip-consumo-row:last-child { border-bottom: none; }
+.cip-consumo-row .sw { width: 8px; height: 8px; border-radius: 2px; flex: 0 0 auto; }
+.cip-consumo-row .v { margin-left: auto; font-size: 15px; }
+.cip-consumo-row .u { font-size: 10px; color: var(--text-muted); width: 36px; text-align: right; }
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 1500px) {
+  .cip-root { --sidebar-w: 225px; --pad: 20px; font-size: 12px; }
+  .cip-cycle-id { font-size: 22px; }
+  .cip-kpi-value { font-size: 21px; }
+  .cip-timer-value { font-size: 21px; }
+  .cip-summary { gap: 16px; }
+}
+
+@media (max-width: 1150px) {
+  .cip-kpis { grid-template-columns: repeat(3, 1fr); }
+  .cip-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 860px) {
+  .cip-root { flex-direction: column; }
+  .cip-sidebar { width: 100%; flex: none; border-right: none; border-bottom: 1px solid var(--border); }
+  .cip-summary { grid-template-columns: 1fr; }
+  .cip-timers { justify-content: flex-start; }
+  .cip-kpis { grid-template-columns: repeat(2, 1fr); }
+}
