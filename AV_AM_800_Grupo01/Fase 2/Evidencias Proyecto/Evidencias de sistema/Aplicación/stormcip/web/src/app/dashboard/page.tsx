@@ -1,7 +1,7 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
+import GuardRol from "@/components/layout/GuardRol";
 import {
   useAlertas, useCicloMostrado, useHistorialAlertas, useLecturas, useUmbrales,
   ultimaLecturaReciente,
@@ -21,9 +21,18 @@ const VISIBLES = [
 ];
 const GRAFICABLES = ["conductividad25C", "conductividad", "turbidez", "ph", "tempEc"];
 
-export default function Dashboard() {
-  const router = useRouter();
-  const { user, rol, cargando, salir } = useAuth();
+// Por ahora solo admin. Cuando se definan los permisos de operador, se agrega
+// aquí y se limitan las funciones dentro del dashboard según `rol`.
+export default function DashboardPage() {
+  return (
+    <GuardRol roles={["admin"]}>
+      <Dashboard />
+    </GuardRol>
+  );
+}
+
+function Dashboard() {
+  const { user, rol, salir } = useAuth();
   const { ciclo, enVivo, cargando: cargandoCiclo } = useCicloMostrado();
   const lecturas = useLecturas(ciclo?.id);
   const alertas = useAlertas();
@@ -31,9 +40,8 @@ export default function Dashboard() {
   const umbrales = useUmbrales();
   const [grafico, setGrafico] = useState("conductividad25C");
 
-  useEffect(() => { if (!cargando && !user) router.replace("/login"); }, [cargando, user, router]);
-
-  if (cargando || !user) return <p className="p-6 text-slate-500">Cargando…</p>;
+  // GuardRol ya garantiza sesión y rol antes de montar este componente.
+  if (!user) return null;
 
   const etapa = ciclo?.etapaActual ?? "";
   const rangos = umbrales[etapa] ?? {};
