@@ -236,6 +236,22 @@ Se implementó la segunda alternativa propuesta: `ttnUplink` consulta `ciclos` p
 
 **FPort 3 (datalog) queda fuera del alcance actual**: `ttnUplink` solo procesa FPort=2. Asignarle a un registro de datalog atrasado "el ciclo en curso ahora" sería incorrecto — el registro corresponde a un momento pasado, que puede ser de otro ciclo o de ningún ciclo. Resolverlo bien requiere asignar el ciclo por ventana de tiempo (ver [sección 7](#7-limitaciones-y-trabajo-futuro)), no por el ciclo activo al momento de recibir el uplink. Además, el firmware 1.3.3 elimina por completo la función de datalog, así que el alcance de esta decisión depende de qué firmware se fije en los equipos reales.
 
+### 5.4b Uplink de estado (FPort 5): firmware real del equipo
+
+`ttnUplink` procesa también el FPort 5 (se envía al unirse a la red y cada 12 horas; manual 2.2.1): modelo (1 byte, `0x3C` = WQS-LB), versión de firmware (2 bytes), banda (1), sub-banda (1) y batería (2 bytes, ÷1000 V). Lo decodifica `decodeWqs` y lo procesa `estadoDispositivo.ts`. **No pertenece a un ciclo**: no exige un ciclo en curso, no crea lecturas y siempre responde 200.
+
+- **Qué guarda** en `dispositivos/{id}`: `firmwareReportado` (ej. `"1.2.0"`), `banda`, `subBanda`, `bateriaV`, `estadoRecibidoEn` (el `received_at` de TTS) y `ultimoPing`. **Nunca** sobrescribe `firmware`: ese lo registra una persona y es el que usa el decoder para elegir el formato de FPort 2.
+- **Modelo distinto de `0x3C`:** `console.warn` y no guarda nada.
+- **Aviso de firmware**, comparando el registrado con el reportado por **familia de formato** (la misma regla de `decodeWqs`: A < 1.2, B 1.2–1.3.0, C ≥ 1.3.1):
+
+| Caso | Aviso |
+|---|---|
+| Familia distinta (ej. registrado `1.2`, el equipo reporta `1.3.3`) | `console.warn` fuerte: *FIRMWARE INCOMPATIBLE… las lecturas se rechazarán o se decodificarán mal; instalar 1.2.x* |
+| Misma familia, versión distinta (ej. `1.2` vs `1.3.0`) | `console.info` informativo |
+| Sin firmware registrado, o no interpretable (`<COMPLETAR>`) | `console.warn`: registrar `firmware` |
+
+- ⚠ **Suposición sin confirmar:** el manual solo da un ejemplo de versión (`0x0100` = v1.0.0). Que `0x0120` signifique `1.2.0` y `0x0133` `1.3.3` (byte bajo = *minor* en el nibble alto, *patch* en el bajo) es una **suposición** a partir de ese ejemplo. Se confirma con el primer FPort 5 real: si el equipo informa una versión distinta de la que muestra `AT+VER`, hay que corregir `decodeFirmwareBytes` en `wqsDecoder.ts`.
+
 ### 5.5 Brechas conocidas para el siguiente sprint
 - No hay cuenta de The Things Stack ni gateway LoRaWAN configurado — nada de esto se pudo probar con hardware real ni con un payload TTN genuino.
 - `TTN_WEBHOOK_SECRET` se lee como variable de entorno simple (`process.env`); antes de producción migrar a Secret Manager (`defineSecret` de `firebase-functions/params`).

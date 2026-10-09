@@ -20,6 +20,13 @@ const PAYLOAD_VALIDO_HEX = "0CB40CCC0305AA011102BC0111";
 // límite de la escala): se descarta como falla de sensor, con el motivo en
 // `descartadas`, y el resto de la lectura se guarda.
 const PAYLOAD_PH_FUERA_DE_RANGO_HEX = "0CB40CCC0305AA0111060E0111";
+// Uplink de estado (FPort 5, manual 2.2.1): modelo 0x3C (WQS-LB), firmware,
+// banda 0x04 (AU915), sub-banda 2, batería 0x0E10 = 3,6 V. 0x0120 -> 1.2.0 es
+// una suposición a partir del ejemplo del manual (0x0100 -> 1.0.0).
+const ESTADO_FW_1_2_0_HEX = "3C012004020E10";
+// Igual, pero firmware 1.3.3 (formato de FPort 2 no soportado): el log debe
+// mostrar el aviso FIRMWARE INCOMPATIBLE (el seed registra firmware "1.2").
+const ESTADO_FW_1_3_3_HEX = "3C013304020E10";
 // received_at fijo para el caso 5 (idempotencia): con timestamp real (Date.now())
 // cada corrida caería en un segundo distinto y generaría un lecturaId distinto,
 // lo que no probaría nada sobre reintentos de TTN.
@@ -48,7 +55,7 @@ const body = (frmHex, overrides = {}) => ({
   desconocido.end_device_ids.device_id = "device-inexistente";
   await enviarBody(desconocido);
 
-  console.log("== 4) Uplink FPort=5 (debe ignorarse, no se decodifica) ==");
+  console.log("== 4) FPort=5 con un payload de lectura (no mide 7 bytes): se ignora ==");
   const est = body(PAYLOAD_VALIDO_HEX);
   est.uplink_message.f_port = 5;
   await enviarBody(est);
@@ -61,6 +68,22 @@ const body = (frmHex, overrides = {}) => ({
   await enviarBody(retry);
   console.log("-- reenvio (mismo body): deberia pisar la misma lectura/alertas, no duplicar --");
   await enviarBody(retry);
+
+  console.log("== 6) Estado (FPort=5), firmware 1.2.0 AU915: se guarda sin avisos ==");
+  const estado = body(ESTADO_FW_1_2_0_HEX);
+  estado.uplink_message.f_port = 5;
+  await enviarBody(estado);
+
+  console.log("== 7) Estado (FPort=5), firmware 1.3.3: se guarda y el log avisa FIRMWARE INCOMPATIBLE ==");
+  const estadoIncompatible = body(ESTADO_FW_1_3_3_HEX);
+  estadoIncompatible.uplink_message.f_port = 5;
+  await enviarBody(estadoIncompatible);
+
+  console.log("== 8) Estado (FPort=5) de dispositivo desconocido: 200 ignorado ==");
+  const estadoDesconocido = body(ESTADO_FW_1_2_0_HEX);
+  estadoDesconocido.uplink_message.f_port = 5;
+  estadoDesconocido.end_device_ids.device_id = "device-inexistente";
+  await enviarBody(estadoDesconocido);
 })();
 
 async function enviarBody(body) {

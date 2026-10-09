@@ -225,6 +225,14 @@ real del equipo (confirmar con el uplink de estado FPort=5 o el comando
 `"formato no soportado"` para FPort=2 y la lectura se ignora igual que en los
 casos anteriores, sin error visible del lado de TTS.
 
+Para saberlo sin adivinar: `ttnUplink` procesa el uplink de estado (FPort 5,
+al unirse a la red y cada 12 h) y guarda `firmwareReportado` en el dispositivo
+sin tocar `firmware`. Si el firmware reportado es de otra familia de formato
+que el registrado, el log de la función muestra `FIRMWARE INCOMPATIBLE` (ver
+`firebase functions:log --project stormcip-972bd --only ttnUplink`). La
+codificación de la versión (`0x0120` → `1.2.0`) es una suposición hasta el
+primer FPort 5 real (ver `modelo-datos-sensores.md`, sección 5.4b).
+
 ## 7) Fuera de esta guía
 
 - `firestore.rules` y `hosting` **no se despliegan acá** — se coordinan

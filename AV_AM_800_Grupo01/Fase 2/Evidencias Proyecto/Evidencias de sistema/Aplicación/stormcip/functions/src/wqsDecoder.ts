@@ -91,7 +91,12 @@ function decodeFPort5(bytes: Uint8Array): WqsDecodeResult {
   return ok(5, { modelo, firmware, banda, subBanda, bateriaV });
 }
 
-/** BCD: 0x0100 -> "1.0.0", 0x0133 -> "1.3.3" (ver ejemplo del extracto, sección 2.2.1). */
+/**
+ * 0x0100 -> "1.0.0" es el ÚNICO ejemplo del manual (extracto, sección 2.2.1).
+ * Que el byte bajo sea "minor en el nibble alto, patch en el bajo"
+ * (0x0120 -> "1.2.0", 0x0133 -> "1.3.3") es una SUPOSICIÓN a partir de ese
+ * ejemplo: se confirma con el primer FPort 5 real (ver modelo-datos-sensores.md).
+ */
 function decodeFirmwareBytes(hi: number, lo: number): string {
   const major = hi;
   const minor = (lo >> 4) & 0x0f;
@@ -101,14 +106,15 @@ function decodeFirmwareBytes(hi: number, lo: number): string {
 
 // ---------- Versión de firmware: clasificación de formato ----------
 
-type Version = { major: number; minor: number; patch: number };
+export type Version = { major: number; minor: number; patch: number };
 
-function parseFirmware(firmware: string): Version {
+/** "1.2" → 1.2.0; los segmentos que faltan o no son numéricos valen 0. */
+export function parseFirmware(firmware: string): Version {
   const [major = 0, minor = 0, patch = 0] = firmware.split(".").map((n) => Number(n) || 0);
   return { major, minor, patch };
 }
 
-function compararVersion(a: Version, b: Version): number {
+export function compararVersion(a: Version, b: Version): number {
   if (a.major !== b.major) return a.major - b.major;
   if (a.minor !== b.minor) return a.minor - b.minor;
   return a.patch - b.patch;
@@ -118,12 +124,22 @@ const V1_2_0: Version = { major: 1, minor: 2, patch: 0 };
 const V1_3_1: Version = { major: 1, minor: 3, patch: 1 };
 const V1_3_3: Version = { major: 1, minor: 3, patch: 3 };
 
-type FormatoFPort2 = "A" | "B" | "C";
+/** Familia de formato de FPort 2: A < 1.2, B 1.2–1.3.0, C ≥ 1.3.1 (no soportada). */
+export type FormatoFPort2 = "A" | "B" | "C";
 
 function clasificarFormatoFPort2(v: Version): FormatoFPort2 {
   if (compararVersion(v, V1_2_0) < 0) return "A";
   if (compararVersion(v, V1_3_1) < 0) return "B";
   return "C";
+}
+
+/**
+ * Familia de formato que decodeWqs usa para un firmware dado. Es la misma
+ * regla que elige el decoder de FPort 2; se exporta para comparar el firmware
+ * registrado de un equipo con el que reporta en su uplink de estado (FPort 5).
+ */
+export function familiaFormatoFirmware(firmware: string): FormatoFPort2 {
+  return clasificarFormatoFPort2(parseFirmware(firmware));
 }
 
 // ---------- FPort 2: lectura en tiempo real ----------
@@ -171,7 +187,7 @@ function decodeFPort2(bytes: Uint8Array, firmwareStr?: string): WqsDecodeResult 
   const base = { bateriaV, tempExterna };
   const restante = bytes.length - 5;
 
-  const formato = firmwareStr ? clasificarFormatoFPort2(parseFirmware(firmwareStr)) : undefined;
+  const formato = firmwareStr ? familiaFormatoFirmware(firmwareStr) : undefined;
 
   if (formato === "C") {
     return err("formato no soportado: firmware >= 1.3.1 usa flag de 2 bytes sin documentar", bytes, 2);

@@ -1,10 +1,11 @@
 import { onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
-import { getFirestore, Timestamp } from "firebase-admin/firestore";
+import { getFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
 import { decodeWqs, bytesToHex } from "./wqsDecoder";
 import { Dispositivo } from "./types";
 import { procesarLectura } from "./ingest";
 import { mapearAValores } from "./mapeoWqs";
+import { planificarEstado } from "./estadoDispositivo";
 
 /**
  * Secreto del webhook, vía Secret Manager (no una env var plana). En local,
@@ -30,8 +31,11 @@ const ttnWebhookSecret = defineSecret("TTN_WEBHOOK_SECRET");
  * genera el decoder oficial de Dragino en GitHub, que corresponde a firmware
  * 1.1 o anteriores (ver Base de datos/TAREAS-DECODER-WQS.md).
  *
- * Solo procesa FPort=2 (lectura en tiempo real); FPort 3 (datalog) y 5 (estado)
- * se ignoran, igual que antes.
+ * Procesa FPort=2 (lectura en tiempo real) y FPort=5 (estado del dispositivo:
+ * firmware, banda, batería; ver estadoDispositivo.ts). FPort 3 (datalog) y los
+ * demás se ignoran. Cualquier rechazo de negocio responde 200 (con un log) para
+ * que TTS no reintente en bucle; solo el secreto inválido (401) y el método (405)
+ * devuelven error.
  */
 export const ttnUplink = onRequest({ secrets: [ttnWebhookSecret] }, async (req, res) => {
   if (req.method !== "POST") { res.status(405).send("Usar POST"); return; }
@@ -48,6 +52,12 @@ export const ttnUplink = onRequest({ secrets: [ttnWebhookSecret] }, async (req, 
   const fPort = body?.uplink_message?.f_port;
   const frmPayload: string | undefined = body?.uplink_message?.frm_payload;
   const receivedAt: string | undefined = body?.received_at;
+
+  // El estado (FPort 5) no pertenece a un ciclo: no exige ciclo en curso ni crea lectura
+  if (fPort === 5) {
+    await procesarEstado(res, { deviceId, frmPayload, receivedAt });
+    return;
+  }
 
   if (!deviceId || !devEui || fPort !== 2 || !frmPayload) {
     res.status(200).json({ ok: true, ignorado: true, motivo: "sin frm_payload, dev_eui o fport != 2" });
@@ -132,6 +142,56 @@ export const ttnUplink = onRequest({ secrets: [ttnWebhookSecret] }, async (req, 
     alertas: respuesta.alertas, descartadas: respuesta.descartadas,
   });
 });
+
+/**
+ * Uplink de estado (FPort 5). Responde SIEMPRE 200: es un dato informativo que
+ * el equipo repite cada 12 h, y un reintento de TTS no arreglaría nada.
+ *
+ * Guarda en dispositivos/{id}: firmwareReportado, banda, subBanda, bateriaV,
+ * estadoRecibidoEn y ultimoPing. NO toca `firmware`, que es el que usa el
+ * decoder para elegir el formato de FPort 2.
+ */
+async function procesarEstado(
+  res: { status: (c: number) => { json: (b: unknown) => void } },
+  { deviceId, frmPayload, receivedAt }: { deviceId?: string; frmPayload?: string; receivedAt?: string },
+) {
+  const ignorar = (motivo: string) => res.status(200).json({ ok: true, ignorado: true, motivo });
+
+  if (!deviceId || !frmPayload) return ignorar("estado sin device_id o frm_payload");
+  try {
+    const devRef = getFirestore().doc(`dispositivos/${deviceId}`);
+    const dev = await devRef.get();
+    if (!dev.exists) return ignorar("dispositivo desconocido");
+
+    const bytes = Buffer.from(frmPayload, "base64");
+    const resultado = decodeWqs(bytes, 5);
+    if (!resultado.ok || resultado.fPort !== 5) {
+      console.warn("ttnUplink: no se pudo decodificar el uplink de estado (FPort 5)", {
+        deviceId, hex: bytesToHex(bytes), error: resultado.ok ? "fPort inesperado" : resultado.error,
+      });
+      return ignorar(resultado.ok ? "fPort inesperado" : resultado.error);
+    }
+
+    const tsMs = receivedAt ? Date.parse(receivedAt) : NaN;
+    const recibidoEn = Number.isNaN(tsMs) ? Timestamp.now() : Timestamp.fromMillis(tsMs);
+    const plan = planificarEstado(resultado.datos, dev.get("firmware") as string | undefined, recibidoEn);
+
+    for (const a of plan.avisos) {
+      const log = a.nivel === "warn" ? console.warn : console.info;
+      log(`ttnUplink: estado de ${deviceId}: ${a.mensaje}`, { deviceId, codigo: a.codigo });
+    }
+    if (!plan.guardar) return ignorar("modelo distinto de WQS-LB");
+
+    await devRef.update({ ...plan.guardar, ultimoPing: FieldValue.serverTimestamp() });
+    res.status(200).json({
+      ok: true, estado: true,
+      firmwareReportado: plan.guardar.firmwareReportado, avisos: plan.avisos.map((a) => a.codigo),
+    });
+  } catch (e) {
+    console.error("ttnUplink: error procesando el uplink de estado", { deviceId, error: String(e) });
+    ignorar("error interno procesando el estado");
+  }
+}
 
 /**
  * El sensor no conoce el ciclo CIP (ver diseño, sección 5.4): se resuelve buscando

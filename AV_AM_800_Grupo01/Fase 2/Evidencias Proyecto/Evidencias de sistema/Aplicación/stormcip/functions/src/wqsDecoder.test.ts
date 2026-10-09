@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decodeWqs } from "./wqsDecoder";
+import { decodeWqs, familiaFormatoFirmware } from "./wqsDecoder";
 
 function hexToBytes(hex: string): Uint8Array {
   const clean = hex.trim();
@@ -22,6 +22,35 @@ describe("FPort 5 — estado del dispositivo", () => {
       subBanda: 0,
       bateriaV: 3.528,
     });
+  });
+
+  // Firmware 1.2.0 en banda AU915 (la del equipo comprado). 0x0120 -> 1.2.0 es
+  // una suposición a partir del ejemplo del manual (0x0100 -> 1.0.0): se
+  // confirma con el primer FPort 5 real.
+  it("decodifica un estado de firmware 1.2.0 en banda AU915, sub-banda 2", () => {
+    const r = decodeWqs(hexToBytes("3C012004020E10"), 5);
+    if (!r.ok || r.fPort !== 5) throw new Error("esperaba ok fPort 5");
+    expect(r.datos).toEqual({
+      modelo: 0x3c, firmware: "1.2.0", banda: "AU915", subBanda: 2, bateriaV: 3.6,
+    });
+  });
+
+  it("decodifica firmware 1.3.3", () => {
+    const r = decodeWqs(hexToBytes("3C013304020E10"), 5);
+    if (!r.ok || r.fPort !== 5) throw new Error("esperaba ok fPort 5");
+    expect(r.datos.firmware).toBe("1.3.3");
+  });
+});
+
+describe("familiaFormatoFirmware — la regla con la que decodeWqs elige el formato de FPort 2", () => {
+  it("A < 1.2, B de 1.2 a 1.3.0, C desde 1.3.1", () => {
+    expect(familiaFormatoFirmware("1.1.0")).toBe("A");
+    expect(familiaFormatoFirmware("1.1")).toBe("A");
+    expect(familiaFormatoFirmware("1.2")).toBe("B");
+    expect(familiaFormatoFirmware("1.2.0")).toBe("B");
+    expect(familiaFormatoFirmware("1.3.0")).toBe("B");
+    expect(familiaFormatoFirmware("1.3.1")).toBe("C");
+    expect(familiaFormatoFirmware("1.3.3")).toBe("C");
   });
 });
 

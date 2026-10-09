@@ -76,6 +76,8 @@ Si `min` no existe, imprime "—" y luego "–3000".
 
 **Estado:** consulta enviada a Dragino por el formato 1.3.x. Hasta tener respuesta, registrar en `dispositivos/{id}.firmware` la versión real (no suponer "1.2").
 
+> 🟡 **Parcialmente resuelto en el backend:** `ttnUplink` ya procesa el uplink de estado (FPort 5) y guarda `firmwareReportado` en el dispositivo, con un aviso en el log si su familia de formato no coincide con la registrada (ver `modelo-datos-sensores.md`, sección 5.4b). Falta que llegue el primer FPort 5 real: ahí se **confirma la codificación de la versión** (`0x0120` → `1.2.0` es una suposición a partir del ejemplo del manual) y se sabrá si hay que instalar la 1.2.
+
 ---
 
 ## 6. Modo del gateway Milesight UG65
@@ -126,3 +128,17 @@ Si `min` no existe, imprime "—" y luego "–3000".
 **Por qué no se resuelve ahora:** asignar la etapa por la hora de la medición exige un **historial de etapas con horas** (por ejemplo `ciclos/{id}.etapas: [{ etapa, desde, hasta }]` escrito por el operador o el script director) y buscar en él el `ts` de cada lectura. Hoy solo existe `etapaActual`.
 
 **Mitigación actual:** el simulador desfasa los uplinks 5 s del inicio de cada etapa; con equipos reales el riesgo depende del intervalo de envío (`AT+TDC`) y de la latencia de la red.
+
+---
+
+## 12. Tarjeta "Equipo" para el admin (propuesta, sin implementar)
+
+`dispositivos` solo lo lee un admin y `/dashboard` ya es solo para admin. Propuesta: una tarjeta **"Equipo"** por cada dispositivo de la línea, con lo que ya guarda el backend (`firmware`, `firmwareReportado`, `banda`, `subBanda`, `bateriaV`, `estadoRecibidoEn`, `ultimoPing`).
+
+- **Firmware:** el registrado y el reportado. Rojo si son de familias de formato distintas (el equipo no se decodificará bien); ámbar si solo difiere la versión o no hay firmware registrado.
+- **Dos relojes distintos, mostrados por separado:**
+  - **Última señal** = `ultimoPing`: cualquier uplink del equipo (lectura o estado).
+  - **Última medición** = `ts` de `ciclos/{id}.ultimaLectura.{deviceId}`: la última lectura de sondas guardada.
+  - El aviso de **"sin datos"** se basa en la **última medición**, no en `ultimoPing`: un equipo puede seguir enviando su estado cada 12 h (señal viva) y no medir nada. Solo aplica con un ciclo `en_curso` (`ultimaLectura` vive en el ciclo).
+- **Batería:** `bateriaV` con la fecha de `estadoRecibidoEn`. El umbral de alerta hay que sacarlo del manual del WQS-LB (no se conoce todavía).
+- **Campo `alimentacion` en `dispositivos` (`"bateria"` | `"externa"`), sin implementar:** con fuente externa de 3,3 V el voltaje que reporta el equipo **no es de una batería** y no debe alertar con el umbral de batería. La tarjeta lo mostraría como "alimentación externa" y no evaluaría el umbral. Se escribe a mano (Admin SDK, como `sondas`), igual que `firmware`; sin el campo se asume `"bateria"`.
