@@ -1,6 +1,8 @@
 // Filtro de calidad + escritura. Compartido por ingestLectura (HTTP legado,
 // ver http.ts) y ttnUplink (webhook LoRaWAN): ambos terminan acá.
-import { getFirestore, FieldPath, FieldValue, Timestamp } from "firebase-admin/firestore";
+import {
+  getFirestore, DocumentReference, FieldPath, FieldValue, Timestamp, Transaction,
+} from "firebase-admin/firestore";
 import {
   Confianza, Derivado, ESQUEMA_VERSION, ETAPAS, ETAPAS_MONITOREADAS, Etapa, PARAMS_DEFECTO,
   ParamsCalculo, Rango, TEMPERATURAS_LIQUIDO, Umbrales, UltimaLectura, VARIABLES, Variable,
@@ -22,6 +24,8 @@ export type ResultadoValidacion =
 export type ResultadoIngesta =
   | {
       ok: true; lecturaId: string; alertas: number; descartadas: Record<string, string>;
+      /** Etapa del ciclo con que se guardó la lectura (la de etapaActual al confirmar). */
+      etapa: Etapa;
       /** true = la lectura ya estaba guardada (reintento con ID determinista): no se escribió nada. */
       duplicado?: boolean;
     }
@@ -283,15 +287,132 @@ export function variablesVistasDe(
   return [...vistas].sort();
 }
 
+/** Lo mínimo de una Transaction de Firestore que usa la ingesta (los tests lo simulan). */
+export type TxIngesta = Pick<Transaction, "getAll" | "set" | "update">;
+
+/** Todo lo que la escritura necesita y NO depende de la etapa: se calcula antes de la transacción. */
+export type DatosIngesta = {
+  deviceId: string;
+  cicloId: string;
+  ts: Timestamp;
+  lecturaRef: DocumentReference;
+  cicloRef: DocumentReference;
+  dispositivoRef: DocumentReference;
+  refAlerta: (id: string) => DocumentReference;
+  limpios: Limpios;
+  numericos: Partial<Record<Variable, number>>;
+  derivados: Partial<Record<Derivado, number>>;
+  metodo: Partial<Record<Derivado, string>>;
+  confianza: Partial<Record<Variable | Derivado, Confianza>>;
+  descartadas: Record<string, string>;
+  vistas: string[];
+  umbrales: Umbrales;
+  sondas?: Record<string, Sonda>;
+  extra?: Record<string, unknown>;
+};
+
+export type ResultadoTx =
+  | { ok: false; codigo: number; error: string }
+  | { ok: true; etapa: Etapa; duplicado: true }
+  | { ok: true; etapa: Etapa; duplicado: false; alertas: number };
+
+/**
+ * Cuerpo de la transacción de ingesta.
+ *
+ * La etapa sale del ciclo leído AQUÍ, no de quien llama: si el operador o el
+ * script director cambia de etapa mientras llega la lectura, la lectura, sus
+ * umbrales y el ID de sus alertas usan la etapa que tiene el ciclo al
+ * confirmar (si cambia después de leerla, Firestore reintenta la transacción).
+ *
+ * La ingesta NO escribe `etapaActual`: esa la escriben solo el operador o el
+ * script director. Antes la reescribía con la etapa leída fuera de la
+ * transacción, y un cambio de etapa concurrente se podía revertir.
+ */
+export async function transaccionIngesta(tx: TxIngesta, d: DatosIngesta): Promise<ResultadoTx> {
+  // Firestore exige hacer todas las lecturas antes de cualquier escritura
+  const [lecturaSnap, cicloSnap] = await tx.getAll(d.lecturaRef, d.cicloRef);
+  if (!cicloSnap.exists) return { ok: false, codigo: 404, error: "Ciclo no existe" };
+  const etapa = cicloSnap.get("etapaActual");
+  if (!ETAPAS.includes(etapa)) {
+    return { ok: false, codigo: 409, error: `El ciclo no tiene una etapaActual válida (${etapa})` };
+  }
+
+  // 4. Alertas (umbral y saturación), deduplicadas por ciclo+etapa+clave
+  const disparadas = alertasDeLectura({
+    etapa, numericos: d.numericos, derivados: d.derivados, confianza: d.confianza,
+    rangos: d.umbrales[etapa as Etapa] ?? {}, sondas: d.sondas,
+  }).map((a) => ({ ...a, ref: d.refAlerta(idAlerta(d.cicloId, etapa, a.clave)) }));
+  const alertaSnaps = disparadas.length ? await tx.getAll(...disparadas.map((a) => a.ref)) : [];
+
+  // El ts de ultimaLectura decide si esta lectura la reemplaza
+  const ultimaTs = cicloSnap.data()?.ultimaLectura?.[d.deviceId]?.ts;
+  const plan = planificarEscritura(
+    lecturaSnap.exists,
+    disparadas.map((a, i) => ({
+      id: a.ref.id, valor: a.valor,
+      existente: alertaSnaps[i].exists ? alertaSnaps[i].data() as AlertaGuardada : undefined,
+    })),
+    d.ts,
+    ultimaTs instanceof Timestamp ? ultimaTs : undefined,
+  );
+  if (plan.duplicado) return { ok: true, etapa, duplicado: true };
+
+  tx.set(d.lecturaRef, {
+    v: ESQUEMA_VERSION, ts: d.ts, etapa, deviceId: d.deviceId,
+    valores: d.limpios, derivados: d.derivados, metodo: d.metodo, confianza: d.confianza,
+    ...d.extra,
+  });
+
+  // ultimaLectura anidada por dispositivo: dos equipos no se pisan entre sí.
+  // update con FieldPath reemplaza el mapa del dispositivo completo: un set
+  // con merge mezclaría las `descartadas` de la lectura anterior. Una lectura
+  // atrasada no la pisa, pero sí suma a variablesVistas.
+  const ultima: UltimaLectura = {
+    ts: d.ts, valores: d.limpios, derivados: d.derivados, confianza: d.confianza,
+    descartadas: d.descartadas,
+  };
+  tx.update(
+    d.cicloRef,
+    "actualizadoEn", FieldValue.serverTimestamp(),
+    ...(d.vistas.length
+      ? [new FieldPath("variablesVistas", d.deviceId), FieldValue.arrayUnion(...d.vistas)] : []),
+    ...(plan.actualizarUltima ? [new FieldPath("ultimaLectura", d.deviceId), ultima] : []),
+  );
+
+  plan.alertas.forEach(({ nuevoEpisodio, campos }, i) => {
+    const { variable, tipo, min, max, confianza: confValor, ref } = disparadas[i];
+    const datos = {
+      cicloId: d.cicloId, lineaId: cicloSnap.get("lineaId") ?? null, etapa, variable, tipo,
+      min, max, severidad: "advertencia",
+      ...campos,
+      // Acompaña a ultimoValor: "saturado" = el valor real es ≥ ultimoValor
+      ...("ultimoValor" in campos ? { confianza: confValor } : {}),
+    };
+    // Episodio nuevo: documento completo, sin restos del reconocimiento anterior
+    if (nuevoEpisodio) tx.set(ref, datos);
+    else tx.set(ref, datos, { merge: true });
+  });
+
+  tx.update(d.dispositivoRef, { ultimoPing: FieldValue.serverTimestamp() });
+  return { ok: true, etapa, duplicado: false, alertas: plan.alertas.length };
+}
+
 /**
  * Valida y escribe una lectura. NO autentica al caller: eso es responsabilidad
  * de quien la invoque (http.ts por API key, lorawanAdapter.ts por webhook).
+ *
+ * La etapa NO la decide quien llama: es la `etapaActual` del ciclo al
+ * confirmar la transacción (ver transaccionIngesta).
  */
 export async function procesarLectura(opts: {
   deviceId: string;
   dispositivo: Dispositivo;
   cicloId: string;
-  etapa: string;
+  /**
+   * Etapa que informó el emisor (cuerpo del endpoint HTTP legado). No se usa:
+   * si difiere de la del ciclo solo queda un console.warn.
+   */
+  etapaRecibida?: string;
   valores: Record<string, unknown>;
   ts: Timestamp;
   /** ID determinista del doc (ej. `{devEui}_{tsSegundos}`) → idempotencia ante reintentos de TTN. */
@@ -300,11 +421,7 @@ export async function procesarLectura(opts: {
   extra?: Record<string, unknown>;
 }): Promise<ResultadoIngesta> {
   const db = getFirestore();
-  const { deviceId, dispositivo, cicloId, etapa, valores, ts, extra } = opts;
-
-  if (!ETAPAS.includes(etapa as Etapa)) {
-    return { ok: false, codigo: 400, error: `Etapa inválida. Usar: ${ETAPAS.join(", ")}` };
-  }
+  const { deviceId, dispositivo, cicloId, etapaRecibida, valores, ts, extra } = opts;
 
   // 1. Validación física (rango de la sonda), distinta de los umbrales de proceso (paso 4)
   const validacion = validarYLimpiarValores(valores, dispositivo.sondas);
@@ -317,18 +434,13 @@ export async function procesarLectura(opts: {
     });
   }
 
-  // 2. Ciclo + configuración
-  const cicloRef = db.doc(`ciclos/${cicloId}`);
-  const [ciclo, cfgU, cfgC] = await Promise.all([
-    cicloRef.get(),
+  // 2. Configuración (el ciclo se lee dentro de la transacción)
+  const [cfgU, cfgC] = await Promise.all([
     db.doc("configuracion/umbrales").get(),
     db.doc("configuracion/calculos").get(),
   ]);
-  if (!ciclo.exists) return { ok: false, codigo: 404, error: "Ciclo no existe" };
-
   const umbrales = (cfgU.data() ?? {}) as Umbrales;
   const params = { ...PARAMS_DEFECTO, ...(cfgC.data() ?? {}) } as ParamsCalculo;
-  const rangos = umbrales[etapa as Etapa] ?? {};
 
   // Solo los numéricos entran al cálculo y a la evaluación de umbrales
   const numericos: Partial<Record<Variable, number>> = {};
@@ -343,82 +455,30 @@ export async function procesarLectura(opts: {
 
   // El ID se fija fuera de la transacción: si Firestore la reintenta por
   // contención, el reintento escribe el mismo documento y no uno nuevo.
+  const cicloRef = db.doc(`ciclos/${cicloId}`);
   const lecturaRef = opts.lecturaId
     ? cicloRef.collection("lecturas").doc(opts.lecturaId)
     : cicloRef.collection("lecturas").doc();
 
-  // 4. Alertas (umbral y saturación), deduplicadas por ciclo+etapa+clave
-  const disparadas = alertasDeLectura({
-    etapa, numericos, derivados, confianza, rangos, sondas: dispositivo.sondas,
-  }).map((a) => ({ ...a, ref: db.doc(`alertas/${idAlerta(cicloId, etapa, a.clave)}`) }));
-  const vistas = variablesVistasDe(limpios, derivados, descartadas, dispositivo.sondas);
+  // Transacción (no batch): la etapa y las alertas se deciden con el estado
+  // actual del ciclo y de cada alerta (desde/hasta/conteo/reconocida).
+  const r = await db.runTransaction((tx) => transaccionIngesta(tx, {
+    deviceId, cicloId, ts, lecturaRef, cicloRef,
+    dispositivoRef: db.doc(`dispositivos/${deviceId}`),
+    refAlerta: (id) => db.doc(`alertas/${id}`),
+    limpios, numericos, derivados, metodo, confianza, descartadas,
+    vistas: variablesVistasDe(limpios, derivados, descartadas, dispositivo.sondas),
+    umbrales, sondas: dispositivo.sondas, extra,
+  }));
 
-  // Transacción (no batch): las alertas se escriben según su estado actual
-  // (desde/hasta/conteo/reconocida). Si otra lectura toca la misma alerta entre
-  // la lectura y la escritura, Firestore reintenta en vez de pisar `desde`.
-  const plan = await db.runTransaction(async (tx) => {
-    // Firestore exige hacer todas las lecturas antes de cualquier escritura
-    // El ciclo se vuelve a leer DENTRO de la transacción: el ts de su
-    // ultimaLectura decide si esta lectura la reemplaza, y otra ingesta
-    // concurrente puede haberlo cambiado desde la lectura de arriba.
-    const [lecturaSnap, cicloSnap, ...alertaSnaps] = await tx.getAll(
-      lecturaRef, cicloRef, ...disparadas.map((d) => d.ref),
-    );
-    const ultimaTs = cicloSnap.get(new FieldPath("ultimaLectura", deviceId, "ts"));
-    const plan = planificarEscritura(
-      lecturaSnap.exists,
-      disparadas.map((d, i) => ({
-        id: d.ref.id, valor: d.valor,
-        existente: alertaSnaps[i].exists ? alertaSnaps[i].data() as AlertaGuardada : undefined,
-      })),
-      ts,
-      ultimaTs instanceof Timestamp ? ultimaTs : undefined,
-    );
-    if (plan.duplicado) return plan;
-
-    tx.set(lecturaRef, {
-      v: ESQUEMA_VERSION, ts, etapa, deviceId,
-      valores: limpios, derivados, metodo, confianza,
-      ...extra,
+  if (!r.ok) return r;
+  if (etapaRecibida !== undefined && etapaRecibida !== r.etapa) {
+    console.warn("procesarLectura: la etapa recibida difiere de la del ciclo; se usa la del ciclo", {
+      deviceId, etapaRecibida, etapaCiclo: r.etapa,
     });
-
-    // ultimaLectura anidada por dispositivo: dos equipos no se pisan entre sí.
-    // update con FieldPath reemplaza el mapa del dispositivo completo: un set
-    // con merge mezclaría las `descartadas` de la lectura anterior. Una lectura
-    // atrasada no la pisa (ni a etapaActual), pero sí suma a variablesVistas.
-    const ultima: UltimaLectura = { ts, valores: limpios, derivados, confianza, descartadas };
-    const camposUltima = plan.actualizarUltima
-      ? [new FieldPath("ultimaLectura", deviceId), ultima, "etapaActual", etapa]
-      : [];
-    tx.update(
-      cicloRef,
-      new FieldPath("variablesVistas", deviceId), FieldValue.arrayUnion(...vistas),
-      "actualizadoEn", FieldValue.serverTimestamp(),
-      ...camposUltima,
-    );
-
-    plan.alertas.forEach(({ nuevoEpisodio, campos }, i) => {
-      const { variable, tipo, min, max, confianza: confValor, ref } = disparadas[i];
-      const datos = {
-        cicloId, lineaId: ciclo.get("lineaId") ?? null, etapa, variable, tipo,
-        min, max, severidad: "advertencia",
-        ...campos,
-        // Acompaña a ultimoValor: "saturado" = el valor real es ≥ ultimoValor
-        ...("ultimoValor" in campos ? { confianza: confValor } : {}),
-      };
-      // Episodio nuevo: documento completo, sin restos del reconocimiento anterior
-      if (nuevoEpisodio) tx.set(ref, datos);
-      else tx.set(ref, datos, { merge: true });
-    });
-
-    tx.update(db.doc(`dispositivos/${deviceId}`), {
-      ultimoPing: FieldValue.serverTimestamp(),
-    });
-    return plan;
-  });
-
-  if (plan.duplicado) {
-    return { ok: true, lecturaId: lecturaRef.id, alertas: 0, descartadas, duplicado: true };
   }
-  return { ok: true, lecturaId: lecturaRef.id, alertas: plan.alertas.length, descartadas };
+  if (r.duplicado) {
+    return { ok: true, lecturaId: lecturaRef.id, etapa: r.etapa, alertas: 0, descartadas, duplicado: true };
+  }
+  return { ok: true, lecturaId: lecturaRef.id, etapa: r.etapa, alertas: r.alertas, descartadas };
 }

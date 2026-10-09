@@ -10,6 +10,11 @@
 // equipos escribiendo etapas distintas a la vez hacían que `etapaActual` del
 // ciclo oscilara, y el dashboard mostraba una etapa que cambiaba sola.
 //
+// Hace de "script director": cambia ciclos/{id}.etapaActual con Admin SDK
+// antes de cada etapa. El ingest ya no toma la etapa del cuerpo: usa la del
+// ciclo (la `etapa` que se sigue enviando solo genera un aviso si difiere).
+// Solo emuladores: con un INGEST_URL que no sea local se niega a correr.
+//
 // Uso:
 //   npm run sim                       -> ciclo completo, 2 s por lectura
 //   node simulador.js --intervalo 1   -> más rápido
@@ -19,8 +24,21 @@
 // tiempoHastaLimpio de segundos y una pendiente enorme. Para una curva con
 // tiempos realistas, usar simulador-prod.js, que fecha las lecturas hacia atrás.
 
+const { initializeApp } = require("firebase-admin/app");
+const { getFirestore } = require("firebase-admin/firestore");
+const { PROJECT_ID } = require("./config");
+
 const URL = process.env.INGEST_URL ||
-  "http://127.0.0.1:5001/stormcip-dev/southamerica-west1/ingestLectura";
+  `http://127.0.0.1:5001/${PROJECT_ID}/southamerica-west1/ingestLectura`;
+if (!/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(URL)) {
+  console.error(`simulador.js es solo para emuladores e INGEST_URL apunta a ${URL}.`);
+  console.error("Para producción usa simulador-prod.js con --prod --project stormcip-972bd.");
+  process.exit(1);
+}
+process.env.FIRESTORE_EMULATOR_HOST ??= "127.0.0.1:8080";
+initializeApp({ projectId: PROJECT_ID });
+const db = getFirestore();
+
 const DEVICE_ID = process.env.DEVICE_ID || "wqs-lb-01";
 const API_KEY = process.env.API_KEY || "dev-key-wqs-456";
 const CICLO_ID = process.env.CICLO_ID || "CIP-2026-0001";
@@ -90,6 +108,8 @@ const espera = (ms) => new Promise((r) => setTimeout(r, ms));
   for (const e of ETAPAS) {
     const monitoreada = ["preenjuague", "enjuague", "enjuague_final"].includes(e.etapa);
     console.log(`--- ${e.etapa}${monitoreada ? "" : "  (fuera del alcance de monitoreo)"}`);
+    // El cambio de etapa lo hace el director, no la lectura
+    await db.doc(`ciclos/${CICLO_ID}`).update({ etapaActual: e.etapa });
 
     for (let paso = 0; paso < e.pasos; paso++) {
       const valores = valoresDe(e, paso);

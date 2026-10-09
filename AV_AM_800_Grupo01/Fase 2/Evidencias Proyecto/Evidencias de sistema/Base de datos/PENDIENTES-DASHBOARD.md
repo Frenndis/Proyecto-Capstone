@@ -116,3 +116,13 @@ Si `min` no existe, imprime "—" y luego "–3000".
 - **Alertas:** las de `tipo: "saturacion"` mostrarlas como "≥ {max}" en `PanelAlertas` / `HistorialAlertas` (hoy `formatearRango` las mostraría como "≤ {max}").
 - Quitar la mención fija a la turbidez del aviso de etapa química, o mostrarla solo si el equipo la mide.
 
+
+---
+
+## 11. Lecturas en el borde de una etapa (sin implementar)
+
+**Qué pasa:** la ingesta asigna a cada lectura la `etapaActual` que tiene el ciclo al confirmar la transacción, no la etapa en la que se midió. Una lectura tomada al final de una etapa que llega después del cambio (latencia de LoRaWAN, reintento de TTN) queda registrada en la etapa **nueva**, con sus umbrales y sus alertas. Ejemplo: la última muestra del enjuague, con arrastre todavía alto, entra como primera del ácido, o la última del ácido como primera del enjuague final.
+
+**Por qué no se resuelve ahora:** asignar la etapa por la hora de la medición exige un **historial de etapas con horas** (por ejemplo `ciclos/{id}.etapas: [{ etapa, desde, hasta }]` escrito por el operador o el script director) y buscar en él el `ts` de cada lectura. Hoy solo existe `etapaActual`.
+
+**Mitigación actual:** el simulador desfasa los uplinks 5 s del inicio de cada etapa; con equipos reales el riesgo depende del intervalo de envío (`AT+TDC`) y de la latencia de la red.

@@ -2,10 +2,15 @@
 // Solo se encarga de autenticar y traducir la petición; la validación de
 // datos y la escritura viven en procesarLectura() (ingest.ts), compartida
 // con el adaptador LoRaWAN.
+//
+// La etapa NO la decide el dispositivo: procesarLectura usa la etapaActual del
+// ciclo. `etapa` en el cuerpo es opcional y se ignora (si difiere de la del
+// ciclo queda un console.warn); se acepta para no romper a los emisores que
+// todavía la mandan (simulador.js, simulador-prod.js).
 import { onRequest } from "firebase-functions/v2/https";
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { createHash } from "crypto";
-import { ETAPAS, Etapa, Dispositivo } from "./types";
+import { Dispositivo } from "./types";
 import { procesarLectura } from "./ingest";
 
 export const ingestLectura = onRequest(async (req, res) => {
@@ -14,12 +19,8 @@ export const ingestLectura = onRequest(async (req, res) => {
   const { deviceId, cicloId, etapa, ts, valores } = req.body ?? {};
   const apiKey = req.get("x-api-key");
 
-  if (!deviceId || !cicloId || !etapa || !valores || !apiKey) {
-    res.status(400).json({ error: "Faltan campos: deviceId, cicloId, etapa, valores, x-api-key" });
-    return;
-  }
-  if (!ETAPAS.includes(etapa as Etapa)) {
-    res.status(400).json({ error: `Etapa inválida. Usar: ${ETAPAS.join(", ")}` });
+  if (!deviceId || !cicloId || !valores || !apiKey) {
+    res.status(400).json({ error: "Faltan campos: deviceId, cicloId, valores, x-api-key" });
     return;
   }
 
@@ -35,7 +36,7 @@ export const ingestLectura = onRequest(async (req, res) => {
     deviceId,
     dispositivo: snap.data() as Dispositivo,
     cicloId,
-    etapa: etapa as Etapa,
+    etapaRecibida: etapa === undefined ? undefined : String(etapa),
     valores,
     ts: typeof ts === "number" ? Timestamp.fromMillis(ts) : Timestamp.now(),
   });
@@ -43,6 +44,7 @@ export const ingestLectura = onRequest(async (req, res) => {
   if (!r.ok) { res.status(r.codigo).json({ error: r.error }); return; }
   res.status(201).json({
     ok: true, lecturaId: r.lecturaId, alertas: r.alertas,
+    etapa: r.etapa,               // la del ciclo, que es con la que se guardó
     descartadas: r.descartadas,   // variable -> motivo del descarte
   });
 });

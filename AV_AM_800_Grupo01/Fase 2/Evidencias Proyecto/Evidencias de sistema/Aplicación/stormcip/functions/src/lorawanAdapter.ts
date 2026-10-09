@@ -106,7 +106,6 @@ export const ttnUplink = onRequest({ secrets: [ttnWebhookSecret] }, async (req, 
     deviceId,
     dispositivo,
     cicloId: ciclo.cicloId,
-    etapa: ciclo.etapa,
     valores: valoresCrudos,
     ts: Timestamp.fromMillis(tsMs),
     lecturaId: `${devEui}_${Math.floor(tsMs / 1000)}`,
@@ -136,7 +135,8 @@ export const ttnUplink = onRequest({ secrets: [ttnWebhookSecret] }, async (req, 
 
 /**
  * El sensor no conoce el ciclo CIP (ver diseño, sección 5.4): se resuelve buscando
- * el ciclo "en_curso" de la línea del dispositivo, y se usa su etapaActual.
+ * el ciclo "en_curso" de la línea del dispositivo. La etapa no se toma aquí:
+ * procesarLectura la lee del ciclo dentro de su transacción.
  */
 async function resolverCicloActivo(db: FirebaseFirestore.Firestore, lineaId: string) {
   const snap = await db.collection("ciclos")
@@ -145,6 +145,5 @@ async function resolverCicloActivo(db: FirebaseFirestore.Firestore, lineaId: str
     .limit(1)
     .get();
   if (snap.empty) return null;
-  const doc = snap.docs[0];
-  return { cicloId: doc.id, etapa: doc.get("etapaActual") as string };
+  return { cicloId: snap.docs[0].id };
 }
