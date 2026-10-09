@@ -121,6 +121,11 @@ export const ttnUplink = onRequest({ secrets: [ttnWebhookSecret] }, async (req, 
     res.status(200).json({ ok: true, ignorado: true, motivo: respuesta.error });
     return;
   }
+  // Reintento de TTN de un uplink ya guardado: 200 (no 201) porque no se creó nada
+  if (respuesta.duplicado) {
+    res.status(200).json({ ok: true, duplicado: true, lecturaId: respuesta.lecturaId });
+    return;
+  }
   res.status(201).json({
     ok: true, lecturaId: respuesta.lecturaId,
     alertas: respuesta.alertas, descartadas: respuesta.descartadas,

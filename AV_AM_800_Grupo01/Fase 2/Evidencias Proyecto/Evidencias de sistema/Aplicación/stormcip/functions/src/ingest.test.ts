@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { idAlerta, validarYLimpiarValores } from "./ingest";
+import { Timestamp } from "firebase-admin/firestore";
+import { camposAlerta, idAlerta, planificarEscritura, validarYLimpiarValores } from "./ingest";
 import { Sonda } from "./types";
 
 // Mapa (no array): el modelo v2 permite marcar una sonda como inactiva
@@ -71,5 +72,78 @@ describe("idAlerta — una alerta por ciclo+etapa+variable", () => {
     const a = idAlerta("CIP-2026-0001", "enjuague", "ph");
     expect(a).not.toBe(idAlerta("CIP-2026-0001", "enjuague", "turbidez"));
     expect(a).not.toBe(idAlerta("CIP-2026-0001", "enjuague_final", "ph"));
+  });
+});
+
+// Minutos desde una hora fija: basta para comparar el orden de las lecturas
+const t = (min: number) => Timestamp.fromMillis(Date.UTC(2026, 9, 6, 14, min, 0));
+
+describe("camposAlerta — fechas de la alerta con el reloj de la lectura", () => {
+  it("una alerta nueva parte con desde = hasta = ts de la lectura", () => {
+    const r = camposAlerta(undefined, t(0), 4.1);
+    expect(r.nuevoEpisodio).toBe(true);
+    expect(r.campos).toEqual({ desde: t(0), hasta: t(0), ultimoValor: 4.1, conteo: 1, reconocida: false });
+  });
+
+  // El caso del pendiente: antes `desde` se pisaba en cada repetición
+  it("dos lecturas fuera de rango seguidas no cambian desde, pero sí actualizan hasta", () => {
+    const primera = camposAlerta(undefined, t(0), 4.1).campos;
+    const r = camposAlerta({ ...primera }, t(5), 3.9);
+    expect(r.nuevoEpisodio).toBe(false);
+    expect(r.campos.desde).toEqual(t(0));
+    expect(r.campos.hasta).toEqual(t(5));
+    expect(r.campos.ultimoValor).toBe(3.9);
+    expect(r.campos.conteo).toBe(2);
+  });
+
+  it("no escribe reconocida en una alerta activa (la deja como está)", () => {
+    const r = camposAlerta({ desde: t(0), hasta: t(0), conteo: 1, reconocida: false }, t(5), 3.9);
+    expect(r.campos).not.toHaveProperty("reconocida");
+  });
+
+  // Reintento de TTN o simulador que fecha hacia atrás
+  it("una lectura atrasada no retrocede hasta ni cambia ultimoValor, pero sí adelanta desde", () => {
+    const existente = { desde: t(10), hasta: t(20), conteo: 3, reconocida: false };
+    const r = camposAlerta(existente, t(5), 9.9);
+    expect(r.campos.desde).toEqual(t(5));
+    expect(r.campos.hasta).toEqual(t(20));
+    expect(r.campos).not.toHaveProperty("ultimoValor");
+    expect(r.campos.conteo).toBe(4);
+  });
+
+  it("una lectura entre desde y hasta no mueve ninguno de los dos", () => {
+    const r = camposAlerta({ desde: t(10), hasta: t(20), conteo: 2, reconocida: false }, t(15), 9.9);
+    expect(r.campos.desde).toEqual(t(10));
+    expect(r.campos.hasta).toEqual(t(20));
+    expect(r.campos).not.toHaveProperty("ultimoValor");
+  });
+
+  it("con ts igual a hasta sí actualiza ultimoValor", () => {
+    const r = camposAlerta({ desde: t(10), hasta: t(20), conteo: 2, reconocida: false }, t(20), 9.9);
+    expect(r.campos.ultimoValor).toBe(9.9);
+  });
+
+  it("una alerta reconocida que reaparece es un episodio nuevo", () => {
+    const existente = { desde: t(0), hasta: t(10), conteo: 7, reconocida: true };
+    const r = camposAlerta(existente, t(30), 4.0);
+    expect(r.nuevoEpisodio).toBe(true);
+    expect(r.campos).toEqual({ desde: t(30), hasta: t(30), ultimoValor: 4.0, conteo: 1, reconocida: false });
+  });
+});
+
+describe("planificarEscritura — reintentos con ID determinista", () => {
+  const eventos = [{ id: "CIP-1_enjuague_ph", valor: 4.1 }];
+
+  it("si la lectura ya existe es un duplicado y no planifica ninguna escritura", () => {
+    expect(planificarEscritura(true, eventos, t(0))).toEqual({ duplicado: true });
+  });
+
+  it("si la lectura es nueva planifica una escritura por alerta disparada", () => {
+    const plan = planificarEscritura(false, eventos, t(0));
+    expect(plan.duplicado).toBe(false);
+    if (plan.duplicado) throw new Error("esperaba plan de escritura");
+    expect(plan.alertas).toHaveLength(1);
+    expect(plan.alertas[0].id).toBe("CIP-1_enjuague_ph");
+    expect(plan.alertas[0].campos.conteo).toBe(1);
   });
 });

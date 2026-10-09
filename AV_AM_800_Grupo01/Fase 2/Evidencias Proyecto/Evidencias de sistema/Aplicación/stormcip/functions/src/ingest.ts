@@ -16,7 +16,11 @@ export type ResultadoValidacion =
   | { ok: false; error: string };
 
 export type ResultadoIngesta =
-  | { ok: true; lecturaId: string; alertas: number; descartadas: Record<string, string> }
+  | {
+      ok: true; lecturaId: string; alertas: number; descartadas: Record<string, string>;
+      /** true = la lectura ya estaba guardada (reintento con ID determinista): no se escribió nada. */
+      duplicado?: boolean;
+    }
   | { ok: false; codigo: number; error: string };
 
 /**
@@ -25,6 +29,78 @@ export type ResultadoIngesta =
  */
 export function idAlerta(cicloId: string, etapa: string, variable: string): string {
   return `${cicloId}_${etapa}_${variable}`;
+}
+
+/** Lo que interesa de una alerta ya guardada para decidir cómo actualizarla. */
+export type AlertaGuardada = {
+  desde?: Timestamp; hasta?: Timestamp; conteo?: number; reconocida?: boolean;
+};
+
+export type CamposAlerta = {
+  /** true = se reescribe el documento completo (sin merge): borra reconocidaPor/En del episodio anterior. */
+  nuevoEpisodio: boolean;
+  campos: {
+    desde: Timestamp; hasta: Timestamp; conteo: number;
+    ultimoValor?: number; reconocida?: false;
+  };
+};
+
+/**
+ * Campos de tiempo y estado de una alerta ante una lectura fuera de rango.
+ *
+ * - `desde` y `hasta` salen del mismo reloj: el `ts` de la lectura (antes `desde`
+ *   era la hora del servidor y además se pisaba en cada repetición).
+ * - Las lecturas pueden llegar desordenadas (reintentos de TTN, simulador que
+ *   fecha hacia atrás): `desde` = mínimo y `hasta` = máximo de lo visto, y
+ *   `ultimoValor` solo cambia si la lectura es la más reciente.
+ * - Una alerta ya reconocida que vuelve a dispararse es un episodio nuevo.
+ *
+ * Función pura (sin Firestore): se puede testear sin emulador.
+ */
+export function camposAlerta(
+  existente: AlertaGuardada | undefined, ts: Timestamp, valor: number,
+): CamposAlerta {
+  if (!existente || existente.reconocida === true) {
+    return {
+      nuevoEpisodio: true,
+      campos: { desde: ts, hasta: ts, ultimoValor: valor, conteo: 1, reconocida: false },
+    };
+  }
+  const t = ts.toMillis();
+  const desde = existente.desde && existente.desde.toMillis() <= t ? existente.desde : ts;
+  const esLaMasReciente = !existente.hasta || t >= existente.hasta.toMillis();
+  return {
+    nuevoEpisodio: false,
+    campos: {
+      desde,
+      hasta: esLaMasReciente ? ts : existente.hasta!,
+      conteo: (existente.conteo ?? 0) + 1,
+      ...(esLaMasReciente ? { ultimoValor: valor } : {}),
+    },
+  };
+}
+
+export type EventoAlerta = { id: string; valor: number; existente?: AlertaGuardada };
+
+export type PlanEscritura =
+  | { duplicado: true }
+  | { duplicado: false; alertas: (CamposAlerta & { id: string })[] };
+
+/**
+ * Decide qué escribir dentro de la transacción de ingesta, a partir de lo leído.
+ * Si la lectura ya existe (reintento con ID determinista) no se escribe nada:
+ * repetirla volvería a contar `conteo` en las alertas.
+ *
+ * Función pura (sin Firestore): se puede testear sin emulador.
+ */
+export function planificarEscritura(
+  lecturaYaExiste: boolean, eventos: EventoAlerta[], ts: Timestamp,
+): PlanEscritura {
+  if (lecturaYaExiste) return { duplicado: true };
+  return {
+    duplicado: false,
+    alertas: eventos.map((e) => ({ id: e.id, ...camposAlerta(e.existente, ts, e.valor) })),
+  };
 }
 
 /**
@@ -117,46 +193,71 @@ export async function procesarLectura(opts: {
   // 3. Derivados: cada uno declara método y confianza
   const { derivados, metodo, confianza } = derivarLectura(numericos, params);
 
-  const batch = db.batch();
+  // El ID se fija fuera de la transacción: si Firestore la reintenta por
+  // contención, el reintento escribe el mismo documento y no uno nuevo.
   const lecturaRef = opts.lecturaId
     ? cicloRef.collection("lecturas").doc(opts.lecturaId)
     : cicloRef.collection("lecturas").doc();
 
-  batch.set(lecturaRef, {
-    v: ESQUEMA_VERSION, ts, etapa, deviceId,
-    valores: limpios, derivados, metodo, confianza,
-    ...extra,
-  });
-
-  // ultimaLectura anidada por dispositivo: dos equipos no se pisan entre sí
-  batch.set(cicloRef, {
-    etapaActual: etapa,
-    ultimaLectura: { [deviceId]: { ts, valores: limpios, derivados } },
-    actualizadoEn: FieldValue.serverTimestamp(),
-  }, { merge: true });
-
-  // 4. Alertas de proceso, deduplicadas por ciclo+etapa+variable.
-  //    Nota: un reintento de TTN sobre la misma lectura vuelve a incrementar
-  //    `conteo`. Es un contador de ocurrencias aproximado, no un conteo exacto
-  //    de lecturas; se prefirió eso antes que un documento por lectura.
-  let alertas = 0;
+  // 4. Alertas de proceso, deduplicadas por ciclo+etapa+variable
   const evaluables: Record<string, number> = { ...numericos, ...derivados };
-  for (const [v, valor] of Object.entries(evaluables)) {
+  const disparadas = Object.entries(evaluables).flatMap(([v, valor]) => {
     const r = (rangos as any)[v];
-    if (!fueraDeRango(valor, r)) continue;
-    batch.set(db.doc(`alertas/${idAlerta(cicloId, etapa, v)}`), {
-      cicloId, lineaId: ciclo.get("lineaId") ?? null, etapa, variable: v,
-      min: r.min ?? null, max: r.max ?? null, severidad: "advertencia",
-      desde: FieldValue.serverTimestamp(), hasta: ts,
-      ultimoValor: valor, conteo: FieldValue.increment(1), reconocida: false,
-    }, { merge: true });
-    alertas++;
-  }
-
-  batch.update(db.doc(`dispositivos/${deviceId}`), {
-    ultimoPing: FieldValue.serverTimestamp(),
+    if (!fueraDeRango(valor, r)) return [];
+    return [{ v, valor, r, ref: db.doc(`alertas/${idAlerta(cicloId, etapa, v)}`) }];
   });
-  await batch.commit();
 
-  return { ok: true, lecturaId: lecturaRef.id, alertas, descartadas };
+  // Transacción (no batch): las alertas se escriben según su estado actual
+  // (desde/hasta/conteo/reconocida). Si otra lectura toca la misma alerta entre
+  // la lectura y la escritura, Firestore reintenta en vez de pisar `desde`.
+  const plan = await db.runTransaction(async (tx) => {
+    // Firestore exige hacer todas las lecturas antes de cualquier escritura
+    const [lecturaSnap, ...alertaSnaps] = await tx.getAll(
+      lecturaRef, ...disparadas.map((d) => d.ref),
+    );
+    const plan = planificarEscritura(
+      lecturaSnap.exists,
+      disparadas.map((d, i) => ({
+        id: d.ref.id, valor: d.valor,
+        existente: alertaSnaps[i].exists ? alertaSnaps[i].data() as AlertaGuardada : undefined,
+      })),
+      ts,
+    );
+    if (plan.duplicado) return plan;
+
+    tx.set(lecturaRef, {
+      v: ESQUEMA_VERSION, ts, etapa, deviceId,
+      valores: limpios, derivados, metodo, confianza,
+      ...extra,
+    });
+
+    // ultimaLectura anidada por dispositivo: dos equipos no se pisan entre sí
+    tx.set(cicloRef, {
+      etapaActual: etapa,
+      ultimaLectura: { [deviceId]: { ts, valores: limpios, derivados } },
+      actualizadoEn: FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    plan.alertas.forEach(({ nuevoEpisodio, campos }, i) => {
+      const { v, r, ref } = disparadas[i];
+      const datos = {
+        cicloId, lineaId: ciclo.get("lineaId") ?? null, etapa, variable: v,
+        min: r.min ?? null, max: r.max ?? null, severidad: "advertencia",
+        ...campos,
+      };
+      // Episodio nuevo: documento completo, sin restos del reconocimiento anterior
+      if (nuevoEpisodio) tx.set(ref, datos);
+      else tx.set(ref, datos, { merge: true });
+    });
+
+    tx.update(db.doc(`dispositivos/${deviceId}`), {
+      ultimoPing: FieldValue.serverTimestamp(),
+    });
+    return plan;
+  });
+
+  if (plan.duplicado) {
+    return { ok: true, lecturaId: lecturaRef.id, alertas: 0, descartadas, duplicado: true };
+  }
+  return { ok: true, lecturaId: lecturaRef.id, alertas: plan.alertas.length, descartadas };
 }
