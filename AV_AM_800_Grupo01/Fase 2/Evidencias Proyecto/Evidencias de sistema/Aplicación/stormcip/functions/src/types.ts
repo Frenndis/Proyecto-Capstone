@@ -33,7 +33,11 @@ export type Derivado = (typeof DERIVADOS)[number];
 
 // "medido" = cálculo directo sobre datos reales.
 // "estimado" = usa un supuesto (p. ej. caudal nominal en vez de medido).
-export type Confianza = "medido" | "estimado";
+// "saturado" = la sonda llegó al tope de su rango: el valor guardado es ese tope
+//   y el real es MAYOR o igual (los derivados son una cota inferior).
+// "fuera_de_operacion" = la sonda midió sobre su temperatura máxima de
+//   operación: se guarda, pero no entra a derivados, umbrales ni indicadores.
+export type Confianza = "medido" | "estimado" | "saturado" | "fuera_de_operacion";
 
 export const ETAPAS = [
   "preenjuague", "alcalino", "enjuague", "acido", "enjuague_final", "desinfeccion",
@@ -54,10 +58,16 @@ export type Rango = { min?: number; max?: number };
 export type Umbrales = Partial<Record<Etapa, Partial<Record<string, Rango>>>>;
 
 // ── Catálogo de sondas (spec de hardware, NO va en Firestore) ─
-// Cotas físicas de fábrica: un valor fuera de este rango es una falla de
-// sensor, no una alerta de proceso.
+// Cotas físicas de fábrica. Bajo `min` siempre es falla de sensor. Sobre `max`
+// depende de `satura`:
+//  - true: `max` es el tope del rango de MEDICIÓN y el líquido puede superarlo
+//    (conductividad de la soda, temperatura de la etapa alcalina): la sonda
+//    topa y se guarda `max` con confianza "saturado".
+//  - false: `max` es el límite de la ESCALA y ningún líquido lo supera (pH > 14)
+//    o la sonda no topa: un valor por encima es falla de sensor y se descarta.
 export type SpecVariable = {
   unidad: string; min: number; max: number; resolucion: number;
+  satura: boolean;
   tempMaxOperacion?: number; // límite de la sonda, no del proceso
 };
 export type ModeloSonda =
@@ -68,41 +78,45 @@ export type ModeloSonda =
 
 export const CATALOGO_SONDAS: Record<ModeloSonda, Partial<Record<Variable, SpecVariable>>> = {
   "DR-PH01": {
-    ph:        { unidad: "pH", min: 0, max: 14, resolucion: 0.01, tempMaxOperacion: 60 },
-    tempSonda: { unidad: "°C", min: 0, max: 60, resolucion: 0.1 },
+    // 0–14 es la escala completa del pH: un valor fuera es falla, no saturación
+    ph:        { unidad: "pH", min: 0, max: 14, resolucion: 0.01, satura: false, tempMaxOperacion: 60 },
+    tempSonda: { unidad: "°C", min: 0, max: 60, resolucion: 0.1, satura: true },
   },
   "DR-ECK1.0": {
-    conductividad: { unidad: "µS/cm", min: 0, max: 2000, resolucion: 1, tempMaxOperacion: 60 },
-    tempEc:        { unidad: "°C", min: -20, max: 60, resolucion: 0.1 },
+    conductividad: { unidad: "µS/cm", min: 0, max: 2000, resolucion: 1, satura: true, tempMaxOperacion: 60 },
+    tempEc:        { unidad: "°C", min: -20, max: 60, resolucion: 0.1, satura: true },
   },
   "DR-ECK10.0": {
-    conductividad: { unidad: "µS/cm", min: 10, max: 20000, resolucion: 10, tempMaxOperacion: 60 },
-    tempEc:        { unidad: "°C", min: -20, max: 60, resolucion: 0.1 },
+    conductividad: { unidad: "µS/cm", min: 10, max: 20000, resolucion: 10, satura: true, tempMaxOperacion: 60 },
+    tempEc:        { unidad: "°C", min: -20, max: 60, resolucion: 0.1, satura: true },
   },
   "DR-EC200": {
-    conductividad: { unidad: "µS/cm", min: 1, max: 200000, resolucion: 1, tempMaxOperacion: 80 },
-    tempEc:        { unidad: "°C", min: -5, max: 80, resolucion: 0.1 },
+    conductividad: { unidad: "µS/cm", min: 1, max: 200000, resolucion: 1, satura: true, tempMaxOperacion: 80 },
+    tempEc:        { unidad: "°C", min: -5, max: 80, resolucion: 0.1, satura: true },
   },
-  "DR-ORP1":    { orp: { unidad: "mV", min: -1999, max: 1999, resolucion: 1 } },
+  "DR-ORP1":    { orp: { unidad: "mV", min: -1999, max: 1999, resolucion: 1, satura: true } },
   "DR-DO1": {
-    oxigenoDisuelto: { unidad: "mg/L", min: 0, max: 20, resolucion: 0.01, tempMaxOperacion: 50 },
-    tempSonda:       { unidad: "°C", min: 0, max: 50, resolucion: 0.01 },
+    // Sobresaturación: el agua puede superar 20 mg/L de oxígeno disuelto
+    oxigenoDisuelto: { unidad: "mg/L", min: 0, max: 20, resolucion: 0.01, satura: true, tempMaxOperacion: 50 },
+    tempSonda:       { unidad: "°C", min: 0, max: 50, resolucion: 0.01, satura: true },
   },
-  "DR-DO2":     { oxigenoDisuelto: { unidad: "mg/L", min: 0, max: 20, resolucion: 0.01 } },
+  "DR-DO2":     { oxigenoDisuelto: { unidad: "mg/L", min: 0, max: 20, resolucion: 0.01, satura: true } },
   // Rango del manual, sección 4.5.2 ("TS01: 0~1000NTU"); resolución 0.1 porque
   // el decoder (wqsDecoder) divide el valor crudo por 10.
-  "DR-TS1":     { turbidez: { unidad: "NTU", min: 0, max: 1000, resolucion: 0.1, tempMaxOperacion: 40 } },
-  "DR-TS200":   { turbidez: { unidad: "NTU", min: 0, max: 200, resolucion: 0.1, tempMaxOperacion: 40 } },
-  "DR-TS4000":  { turbidez: { unidad: "NTU", min: 0, max: 4000, resolucion: 1, tempMaxOperacion: 40 } },
-  "DR-CL-2ML":  { cloroResidual: { unidad: "mg/L", min: 0, max: 2, resolucion: 0.01 } },
-  "DR-CL-10ML": { cloroResidual: { unidad: "mg/L", min: 0, max: 10, resolucion: 0.01 } },
+  "DR-TS1":     { turbidez: { unidad: "NTU", min: 0, max: 1000, resolucion: 0.1, satura: true, tempMaxOperacion: 40 } },
+  "DR-TS200":   { turbidez: { unidad: "NTU", min: 0, max: 200, resolucion: 0.1, satura: true, tempMaxOperacion: 40 } },
+  "DR-TS4000":  { turbidez: { unidad: "NTU", min: 0, max: 4000, resolucion: 1, satura: true, tempMaxOperacion: 40 } },
+  // La desinfección con hipoclorito puede superar el rango de cloro
+  "DR-CL-2ML":  { cloroResidual: { unidad: "mg/L", min: 0, max: 2, resolucion: 0.01, satura: true } },
+  "DR-CL-10ML": { cloroResidual: { unidad: "mg/L", min: 0, max: 10, resolucion: 0.01, satura: true } },
   "DR-COD": {
-    cod:      { unidad: "mg/L", min: 0, max: 500, resolucion: 0.1, tempMaxOperacion: 40 },
-    turbidez: { unidad: "NTU", min: 0, max: 200, resolucion: 0.1, tempMaxOperacion: 40 },
+    cod:      { unidad: "mg/L", min: 0, max: 500, resolucion: 0.1, satura: true, tempMaxOperacion: 40 },
+    turbidez: { unidad: "NTU", min: 0, max: 200, resolucion: 0.1, satura: true, tempMaxOperacion: 40 },
   },
   // No es una sonda RS485 sino el DS18B20 integrado del WQS-LB (entrada de
-  // temperatura externa opcional). Rango de fábrica del chip.
-  "DS18B20":    { tempExterna: { unidad: "°C", min: -55, max: 125, resolucion: 0.1 } },
+  // temperatura externa opcional). Rango de fábrica del chip: el chip no topa
+  // en 125 °C (y un CIP no llega ahí), así que un valor fuera es falla.
+  "DS18B20":    { tempExterna: { unidad: "°C", min: -55, max: 125, resolucion: 0.1, satura: false } },
 };
 
 // Modelos que el decoder propio sabe interpretar hoy (flag de 1 byte, fw < 1.3.1)
@@ -134,14 +148,31 @@ export type Lectura = {
   valores: Partial<Record<Variable, number | null>>;
   derivados?: Partial<Record<Derivado, number>>;
   metodo?: Partial<Record<Derivado, string>>;
-  confianza?: Partial<Record<Derivado, Confianza>>;
+  // Por variable medida y por derivado (antes solo derivados)
+  confianza?: Partial<Record<Variable | Derivado, Confianza>>;
+};
+
+/** Último dato de un dispositivo en el ciclo (ciclos/{id}.ultimaLectura.{deviceId}). */
+export type UltimaLectura = {
+  ts: any;
+  valores: Partial<Record<Variable, number | null>>;
+  derivados: Partial<Record<Derivado, number>>;
+  confianza: Partial<Record<Variable | Derivado, Confianza>>;
+  /** Variable → motivo: lo que llegó en esta lectura pero no se guardó. */
+  descartadas: Record<string, string>;
 };
 
 export type Ciclo = {
   plantaId: string; lineaId: string; camion: string; programa: string;
   estado: "en_curso" | "finalizado" | "abortado";
   etapaActual: Etapa; inicio: any; fin?: any;
-  ultimaLectura?: Record<string, { ts: any; valores: Record<string, number | null> }>; // por deviceId
+  ultimaLectura?: Record<string, UltimaLectura>; // por deviceId
+  /**
+   * Variables (medidas y derivadas) que cada dispositivo reportó alguna vez en
+   * el ciclo. Solo crece: el dashboard arma sus tarjetas con esto para que una
+   * variable descartada en una lectura no desaparezca de la pantalla.
+   */
+  variablesVistas?: Record<string, string[]>; // por deviceId
   // Indicadores agregados: los escribe alCerrarCiclo (ciclos.ts) al finalizar.
   indicadores?: Partial<Record<Derivado, number>>;
   indicadoresMetodo?: Partial<Record<Derivado, string>>;
@@ -232,11 +263,28 @@ export function fueraDeRango(valor: number, r?: Rango) {
 
 // Devuelve la spec física de una variable según las sondas ACTIVAS del equipo
 export function specDe(variable: Variable, sondas?: Record<string, Sonda>) {
+  return sondaDe(variable, sondas)?.spec;
+}
+
+// Temperaturas del líquido que mide el propio WQS (no la de proceso del PLC)
+export const TEMPERATURAS_LIQUIDO: Variable[] = ["tempEc", "tempSonda", "tempExterna"];
+
+/**
+ * Spec física de una variable y la temperatura de la MISMA sonda (la que
+ * decide si opera dentro de su tempMaxOperacion): pH → tempSonda,
+ * conductividad → tempEc. Una sonda sin temperatura propia (DR-TS1) queda con
+ * `temperatura` undefined.
+ */
+export function sondaDe(variable: Variable, sondas?: Record<string, Sonda>) {
   if (!sondas) return undefined;
   for (const s of Object.values(sondas)) {
     if (!s.activa) continue;
-    const spec = CATALOGO_SONDAS[s.modelo]?.[variable];
-    if (spec) return spec;
+    const vars = CATALOGO_SONDAS[s.modelo] ?? {};
+    const spec = vars[variable];
+    if (!spec) continue;
+    const temperatura = (Object.keys(vars) as Variable[])
+      .find((v) => v !== variable && TEMPERATURAS_LIQUIDO.includes(v));
+    return { modelo: s.modelo, spec, temperatura };
   }
   return undefined;
 }

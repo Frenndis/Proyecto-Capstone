@@ -1,9 +1,10 @@
 import { onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
-import { decodeWqs, bytesToHex, LecturaTiempoReal } from "./wqsDecoder";
-import { Variable, Dispositivo } from "./types";
+import { decodeWqs, bytesToHex } from "./wqsDecoder";
+import { Dispositivo } from "./types";
 import { procesarLectura } from "./ingest";
+import { mapearAValores } from "./mapeoWqs";
 
 /**
  * Secreto del webhook, vía Secret Manager (no una env var plana). En local,
@@ -98,11 +99,12 @@ export const ttnUplink = onRequest({ secrets: [ttnWebhookSecret] }, async (req, 
     return;
   }
 
-  const valoresCrudos = mapearAValores(resultado.datos);
+  const dispositivo = dev.data() as Dispositivo;
+  const valoresCrudos = mapearAValores(resultado.datos, dispositivo.sondas);
 
   const respuesta = await procesarLectura({
     deviceId,
-    dispositivo: dev.data() as Dispositivo,
+    dispositivo,
     cicloId: ciclo.cicloId,
     etapa: ciclo.etapa,
     valores: valoresCrudos,
@@ -131,35 +133,6 @@ export const ttnUplink = onRequest({ secrets: [ttnWebhookSecret] }, async (req, 
     alertas: respuesta.alertas, descartadas: respuesta.descartadas,
   });
 });
-
-// Mapeo fijo para la configuración de sondas de este proyecto: DR-PH01,
-// DR-ECK10.0, DR-TS1 y el DS18B20 externo (ver seed.js).
-//
-// Las tres temperaturas se guardan SEPARADAS por origen (modelo v2): la sonda
-// de pH y la de conductividad miden el mismo líquido pero en puntos distintos,
-// y antes se pisaban bajo una única variable "temperatura". `tempEc` es además
-// la que usa calculos.ts para compensar la conductividad a 25 °C.
-//
-// No es un mapeo genérico de todo lo que wqsDecoder puede producir: ORP, DO,
-// EC_K1 y formatoInferido no aplican a esta configuración y se ignoran.
-const CAMPO_A_VARIABLE: Partial<Record<keyof LecturaTiempoReal, Variable>> = {
-  ph: "ph",
-  phTemp: "tempSonda",
-  turbidez: "turbidez",
-  ecK10: "conductividad",
-  ecK10Temp: "tempEc",
-  tempExterna: "tempExterna",
-};
-
-function mapearAValores(datos: LecturaTiempoReal): Record<string, unknown> {
-  const valores: Record<string, unknown> = {};
-  for (const [campo, variable] of Object.entries(CAMPO_A_VARIABLE)) {
-    const valor = (datos as Record<string, unknown>)[campo];
-    if (valor === undefined) continue;
-    valores[variable] = valor;
-  }
-  return valores;
-}
 
 /**
  * El sensor no conoce el ciclo CIP (ver diseño, sección 5.4): se resuelve buscando

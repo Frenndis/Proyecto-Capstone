@@ -101,6 +101,49 @@ describe("calcularIndicadoresCiclo", () => {
     expect(r.lecturasConsideradas).toBe(0);
   });
 
+  // Equipo comprado (sin turbidez): el método no debe nombrar un criterio que no se midió
+  it("sin turbidez en las lecturas, el método de tiempo hasta limpio solo nombra la conductividad", () => {
+    const sinTurbidez = (min: number, ec25: number): LecturaCruda =>
+      ({ ts: t(min), etapa: "enjuague_final", valores: {}, derivados: { conductividad25C: ec25 } });
+    const r = calcularIndicadoresCiclo([sinTurbidez(0, 280), sinTurbidez(1, 190)], PARAMS_DEFECTO);
+    expect(r.global?.derivados.tiempoHastaLimpio).toBe(60);
+    expect(r.global?.metodo.tiempoHastaLimpio).not.toMatch(/turbidez/);
+  });
+
+  it("arrastre con la primera lectura saturada: cota inferior marcada como saturado", () => {
+    const r = calcularIndicadoresCiclo([
+      { ts: t(0), etapa: "enjuague", valores: { conductividad: 2000 },
+        derivados: { conductividad25C: 1466.3 },
+        confianza: { conductividad: "saturado", conductividad25C: "saturado" } },
+      lectura(1, "enjuague", 400), lectura(2, "enjuague", 200),
+    ], PARAMS_DEFECTO);
+    const e = r.porEtapa.enjuague!;
+    expect(e.derivados.arrastreQuimico).toBe(1316.3);   // 1466,3 − 150: "al menos"
+    expect(e.confianza.arrastreQuimico).toBe("saturado");
+    expect(e.metodo.arrastreQuimico).toMatch(/cota inferior/);
+    // La pendiente parte de la primera lectura no saturada (min 1 → min 2)
+    expect(e.derivados.pendienteConductividad).toBe(-200);
+    expect(e.metodo.pendienteConductividad).toMatch(/no saturadas/);
+  });
+
+  it("una EC25 saturada nunca cuenta como limpia", () => {
+    const r = calcularIndicadoresCiclo([
+      { ts: t(0), etapa: "enjuague_final", valores: {},
+        derivados: { conductividad25C: 150 }, confianza: { conductividad25C: "saturado" } },
+      lectura(1, "enjuague_final", 190),
+    ], PARAMS_DEFECTO);
+    expect(r.global?.derivados.tiempoHastaLimpio).toBe(60);
+  });
+
+  it("lo fuera de operación no entra al cálculo (turbidez sobre 40 °C no aprueba la limpieza)", () => {
+    const r = calcularIndicadoresCiclo([
+      { ts: t(0), etapa: "enjuague_final", valores: { turbidez: 5 },
+        derivados: { conductividad25C: 180 }, confianza: { turbidez: "fuera_de_operacion" } },
+      lectura(1, "enjuague_final", 170, 5),
+    ], PARAMS_DEFECTO);
+    expect(r.global?.derivados.tiempoHastaLimpio).toBe(60);
+  });
+
   it("suma el volumen por etapa en vez de medir el lapso completo", () => {
     const dosEtapas: LecturaCruda[] = [
       { ts: t(0),  etapa: "preenjuague", derivados: { conductividad25C: 900 }, valores: {} },

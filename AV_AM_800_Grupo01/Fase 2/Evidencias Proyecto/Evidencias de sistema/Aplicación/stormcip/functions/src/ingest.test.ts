@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { Timestamp } from "firebase-admin/firestore";
-import { camposAlerta, idAlerta, planificarEscritura, validarYLimpiarValores } from "./ingest";
+import {
+  alertasDeLectura, camposAlerta, idAlerta, planificarEscritura, validarYLimpiarValores,
+  variablesVistasDe,
+} from "./ingest";
 import { Sonda } from "./types";
 
 // Mapa (no array): el modelo v2 permite marcar una sonda como inactiva
@@ -27,15 +30,24 @@ describe("validarYLimpiarValores — tempExterna (DS18B20)", () => {
     expect(r.limpios.tempExterna).toBe(25);
   });
 
-  // Cambio de criterio respecto de v1: un valor fuera de rango descarta ESA
-  // variable, no la lectura entera. Lo que midieron las otras sondas se guarda.
-  it("descarta tempExterna fuera del rango del DS18B20 (-55 a 125 °C) y conserva el resto", () => {
+  // El DS18B20 no satura (satura: false): sobre 125 °C es falla del chip
+  it("descarta tempExterna sobre el máximo del DS18B20 (125 °C) y conserva el resto", () => {
     const r = validarYLimpiarValores({ ph: 7.0, tempExterna: 130 }, SONDAS_PROYECTO);
     expect(r.ok).toBe(true);
     if (!r.ok) throw new Error("esperaba ok");
     expect(r.limpios.tempExterna).toBeUndefined();
     expect(r.limpios.ph).toBe(7.0);
-    expect(r.descartadas.tempExterna).toMatch(/fuera de rango físico/);
+    expect(r.descartadas.tempExterna).toMatch(/sobre el máximo de escala \(130 > 125 °C\)/);
+  });
+
+  // Un valor bajo el mínimo descarta ESA variable, no la lectura entera
+  it("descarta tempExterna bajo el mínimo del DS18B20 (-55 °C) y conserva el resto", () => {
+    const r = validarYLimpiarValores({ ph: 7.0, tempExterna: -60 }, SONDAS_PROYECTO);
+    expect(r.ok).toBe(true);
+    if (!r.ok) throw new Error("esperaba ok");
+    expect(r.limpios.tempExterna).toBeUndefined();
+    expect(r.limpios.ph).toBe(7.0);
+    expect(r.descartadas.tempExterna).toMatch(/bajo el mínimo físico \(-60 < -55 °C\)/);
   });
 
   it("descarta una variable sin sonda activa que la mida", () => {
@@ -59,6 +71,169 @@ describe("validarYLimpiarValores — temperaturas separadas por origen", () => {
     if (!r.ok) throw new Error("esperaba ok");
     expect(r.limpios.tempSonda).toBe(38);
     expect(r.limpios.tempEc).toBe(34.2);
+  });
+});
+
+// Equipo comprado: DR-PH01 + DR-ECK1.0, sin turbidez ni DS18B20
+const SONDAS_COMPRADAS: Record<string, Sonda> = {
+  s1: { sondaId: "s1", modelo: "DR-PH01",   activa: true },
+  s2: { sondaId: "s2", modelo: "DR-ECK1.0", activa: true },
+};
+
+const validar = (valores: Record<string, unknown>, sondas = SONDAS_COMPRADAS) => {
+  const r = validarYLimpiarValores(valores, sondas);
+  if (!r.ok) throw new Error(r.error);
+  return r;
+};
+
+describe("validarYLimpiarValores — saturación (DR-ECK1.0, 0–2000 µS/cm)", () => {
+  it("sobre el máximo guarda el tope con confianza saturado", () => {
+    const r = validar({ conductividad: 2971, tempEc: 43.2 });
+    expect(r.limpios.conductividad).toBe(2000);
+    expect(r.confianza.conductividad).toBe("saturado");
+    expect(r.confianza.tempEc).toBe("medido");
+  });
+
+  // Una sonda que topa reporta justo su máximo: no se distingue de "más"
+  it("justo en el máximo también cuenta como saturado", () => {
+    expect(validar({ conductividad: 2000, tempEc: 30 }).confianza.conductividad).toBe("saturado");
+    expect(validar({ conductividad: 1999, tempEc: 30 }).confianza.conductividad).toBe("medido");
+  });
+
+  it("bajo el mínimo se descarta con el valor y el mínimo en el motivo", () => {
+    const r = validar({ ph: -0.5, tempSonda: 20, conductividad: 300, tempEc: 20 });
+    expect(r.limpios.ph).toBeUndefined();
+    expect(r.descartadas.ph).toBe("bajo el mínimo físico (-0.5 < 0 pH): falla de sensor");
+    expect(r.limpios.conductividad).toBe(300);
+  });
+
+  // 0–14 es la escala del pH, no un rango de medición: fuera de ella es falla
+  it("el pH no satura: sobre 14 se descarta como falla de sensor; 14 justo es válido", () => {
+    const r = validar({ ph: 15.5, tempSonda: 27.3 });
+    expect(r.limpios.ph).toBeUndefined();
+    expect(r.confianza.ph).toBeUndefined();
+    expect(r.descartadas.ph).toBe("sobre el máximo de escala (15.5 > 14 pH): falla de sensor");
+    const tope = validar({ ph: 14, tempSonda: 27.3 });
+    expect(tope.limpios.ph).toBe(14);
+    expect(tope.confianza.ph).toBe("medido");
+  });
+
+  it("las temperaturas de sonda sí saturan (tempSonda y tempEc topan en 60 °C)", () => {
+    const r = validar({ ph: 13, tempSonda: 75.6, conductividad: 900, tempEc: 76 });
+    expect(r.limpios.tempSonda).toBe(60);
+    expect(r.confianza.tempSonda).toBe("saturado");
+    expect(r.limpios.tempEc).toBe(60);
+    expect(r.confianza.tempEc).toBe("saturado");
+  });
+
+  it("una variable sin sonda en el equipo comprado (turbidez) se descarta", () => {
+    const r = validar({ ph: 7, tempSonda: 20, turbidez: 12 });
+    expect(r.descartadas.turbidez).toMatch(/sonda activa/);
+  });
+});
+
+describe("validarYLimpiarValores — temperatura máxima de operación (60 °C)", () => {
+  it("con la temperatura de la propia sonda sobre 60 °C la variable queda fuera de operación", () => {
+    const r = validar({ ph: 13.1, tempSonda: 59, conductividad: 1800, tempEc: 61 });
+    expect(r.confianza.conductividad).toBe("fuera_de_operacion");
+    expect(r.confianza.ph).toBe("medido");     // su sonda (tempSonda) está bajo 60
+  });
+
+  // tempEc 76 °C llega como 60 saturado: no se sabe cuánto mide, solo que ≥ 60
+  it("temperatura saturada: fuera de operación aunque el valor guardado sea 60", () => {
+    const r = validar({ ph: 13.2, tempSonda: 75.6, conductividad: 65535, tempEc: 76 });
+    expect(r.limpios.tempEc).toBe(60);
+    expect(r.confianza.tempEc).toBe("saturado");
+    expect(r.confianza.tempSonda).toBe("saturado");
+    // fuera de operación prevalece sobre saturado
+    expect(r.limpios.conductividad).toBe(2000);
+    expect(r.confianza.conductividad).toBe("fuera_de_operacion");
+    expect(r.confianza.ph).toBe("fuera_de_operacion");
+  });
+
+  it("justo en 60 °C sigue en operación… salvo que sea el tope de la temperatura (saturada)", () => {
+    // tempEc tiene max 60: un 60 es saturado y por lo tanto no se sabe si está bajo el límite
+    expect(validar({ conductividad: 500, tempEc: 60 }).confianza.conductividad).toBe("fuera_de_operacion");
+    expect(validar({ conductividad: 500, tempEc: 59.9 }).confianza.conductividad).toBe("medido");
+  });
+
+  // DR-TS1 no mide temperatura: se usa la mayor del líquido disponible
+  it("turbidez (sin temperatura propia) usa la mayor temperatura del líquido", () => {
+    const r = validar({ turbidez: 5, tempEc: 45, tempExterna: 30 }, SONDAS_PROYECTO);
+    expect(r.confianza.turbidez).toBe("fuera_de_operacion");   // 45 > 40
+    expect(validar({ turbidez: 5, tempEc: 35 }, SONDAS_PROYECTO).confianza.turbidez).toBe("medido");
+  });
+
+  it("sin temperatura medida no se puede evaluar: queda medido", () => {
+    expect(validar({ conductividad: 500 }).confianza.conductividad).toBe("medido");
+  });
+});
+
+describe("alertasDeLectura — umbral y saturación como alertas separadas", () => {
+  const RANGOS = { conductividad25C: { max: 1500 }, ph: { min: 5, max: 11 } };
+
+  it("conductividad saturada en una etapa monitoreada: alerta de saturación y de umbral", () => {
+    const a = alertasDeLectura({
+      etapa: "enjuague",
+      numericos: { conductividad: 2000, tempEc: 43.2, ph: 8.9 },
+      derivados: { conductividad25C: 1466.3 },
+      confianza: { conductividad: "saturado", tempEc: "medido", ph: "medido", conductividad25C: "saturado" },
+      rangos: { conductividad25C: { max: 1400 } },
+      sondas: SONDAS_COMPRADAS,
+    });
+    expect(a.map((x) => x.clave).sort()).toEqual(["conductividad25C", "conductividad_saturacion"]);
+    const sat = a.find((x) => x.tipo === "saturacion")!;
+    expect(sat).toMatchObject({ variable: "conductividad", valor: 2000, min: null, max: 2000 });
+    const umbral = a.find((x) => x.tipo === "umbral")!;
+    expect(umbral).toMatchObject({ variable: "conductividad25C", confianza: "saturado", max: 1400 });
+  });
+
+  // Saturado = cota inferior: puede violar un máximo con certeza, nunca un mínimo
+  it("un derivado saturado bajo el máximo no dispara el umbral", () => {
+    const a = alertasDeLectura({
+      etapa: "enjuague", numericos: {}, derivados: { conductividad25C: 1466.3 },
+      confianza: { conductividad25C: "saturado" },
+      rangos: { conductividad25C: { min: 1480, max: 1500 } }, sondas: SONDAS_COMPRADAS,
+    });
+    expect(a).toEqual([]);
+  });
+
+  it("lo fuera de operación no dispara umbrales", () => {
+    const a = alertasDeLectura({
+      etapa: "enjuague", numericos: { ph: 13 }, derivados: {},
+      confianza: { ph: "fuera_de_operacion" }, rangos: RANGOS, sondas: SONDAS_COMPRADAS,
+    });
+    expect(a).toEqual([]);
+  });
+
+  it("en etapas químicas no hay alerta de saturación", () => {
+    const a = alertasDeLectura({
+      etapa: "alcalino", numericos: { conductividad: 2000 }, derivados: {},
+      confianza: { conductividad: "fuera_de_operacion" }, rangos: {}, sondas: SONDAS_COMPRADAS,
+    });
+    expect(a).toEqual([]);
+  });
+
+  it("umbral normal sobre un valor medido", () => {
+    const a = alertasDeLectura({
+      etapa: "enjuague_final", numericos: { ph: 4.2 }, derivados: {},
+      confianza: { ph: "medido" }, rangos: RANGOS, sondas: SONDAS_COMPRADAS,
+    });
+    expect(a).toEqual([{
+      clave: "ph", variable: "ph", tipo: "umbral", valor: 4.2, confianza: "medido", min: 5, max: 11,
+    }]);
+  });
+});
+
+describe("variablesVistasDe — tarjetas estables en el dashboard", () => {
+  it("incluye medidas, derivados y descartadas por valor inválido; no las null ni las sin sonda", () => {
+    const vistas = variablesVistasDe(
+      { conductividad: 300, tempEc: 20, tempExterna: null },
+      { conductividad25C: 316 },
+      { ph: "bajo el mínimo físico (-0.5 < 0 pH): falla de sensor", turbidez: "el equipo no tiene una sonda activa para esta variable" },
+      SONDAS_COMPRADAS,
+    );
+    expect(vistas).toEqual(["conductividad", "conductividad25C", "ph", "tempEc"]);
   });
 });
 
@@ -145,5 +320,29 @@ describe("planificarEscritura — reintentos con ID determinista", () => {
     expect(plan.alertas).toHaveLength(1);
     expect(plan.alertas[0].id).toBe("CIP-1_enjuague_ph");
     expect(plan.alertas[0].campos.conteo).toBe(1);
+  });
+});
+
+describe("planificarEscritura — ultimaLectura solo avanza", () => {
+  it("sin ultimaLectura guardada, la lectura pasa a ser la última", () => {
+    const plan = planificarEscritura(false, [], t(10));
+    expect(plan).toMatchObject({ duplicado: false, actualizarUltima: true });
+  });
+
+  it("una lectura más nueva reemplaza la última", () => {
+    expect(planificarEscritura(false, [], t(10), t(5))).toMatchObject({ actualizarUltima: true });
+  });
+
+  // Reintento de TTN o datalog: se guarda en lecturas, pero no pisa la última
+  it("una lectura atrasada no reemplaza la última, aunque sí planifica sus alertas", () => {
+    const plan = planificarEscritura(false, [{ id: "CIP-1_enjuague_ph", valor: 4.1 }], t(5), t(10));
+    expect(plan.duplicado).toBe(false);
+    if (plan.duplicado) throw new Error("esperaba plan de escritura");
+    expect(plan.actualizarUltima).toBe(false);
+    expect(plan.alertas).toHaveLength(1);
+  });
+
+  it("con el mismo ts sí reemplaza (reenvío de la misma lectura)", () => {
+    expect(planificarEscritura(false, [], t(10), t(10))).toMatchObject({ actualizarUltima: true });
   });
 });

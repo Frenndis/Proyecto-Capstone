@@ -11,7 +11,7 @@ import {
   getFirestore, FieldValue, Timestamp, DocumentReference,
 } from "firebase-admin/firestore";
 import { Derivacion, derivarCiclo } from "./calculos";
-import { ETAPAS_MONITOREADAS, Etapa, PARAMS_DEFECTO, ParamsCalculo } from "./types";
+import { Confianza, ETAPAS_MONITOREADAS, Etapa, PARAMS_DEFECTO, ParamsCalculo } from "./types";
 
 // Tope de seguridad: un ciclo no debería pasar de unos cientos de lecturas
 // (el WQS envía cada 20 min). Si se llega a este número, algo anda mal.
@@ -23,12 +23,15 @@ export type LecturaCruda = {
   etapa: string;
   valores?: Record<string, number | null>;
   derivados?: Record<string, number>;
+  /** Por variable y derivado; las lecturas anteriores a la saturación no la traen. */
+  confianza?: Record<string, Confianza>;
 };
 
 type LecturaCalculo = {
   ts: Date;
   valores: Record<string, number>;
   derivados?: Record<string, number>;
+  confianza?: Record<string, Confianza>;
 };
 
 export type ResultadoIndicadores = {
@@ -37,10 +40,16 @@ export type ResultadoIndicadores = {
   lecturasConsideradas: number;
 };
 
-/** null = sensor no conectado: no entra al cálculo, pero no invalida la lectura. */
-function soloNumericos(v?: Record<string, number | null>): Record<string, number> {
+/**
+ * null = sensor no conectado: no entra al cálculo, pero no invalida la lectura.
+ * Lo medido fuera de operación (sonda sobre su temperatura máxima) tampoco entra.
+ */
+function soloNumericos(
+  v?: Record<string, number | null>, confianza?: Record<string, Confianza>,
+): Record<string, number> {
   const out: Record<string, number> = {};
   for (const [k, n] of Object.entries(v ?? {})) {
+    if (confianza?.[k] === "fuera_de_operacion") continue;
     if (typeof n === "number" && Number.isFinite(n)) out[k] = n;
   }
   return out;
@@ -66,7 +75,8 @@ export function calcularIndicadoresCiclo(
   }
 
   const aCalculo = (l: LecturaCruda): LecturaCalculo => ({
-    ts: l.ts, valores: soloNumericos(l.valores), derivados: l.derivados,
+    ts: l.ts, valores: soloNumericos(l.valores, l.confianza),
+    derivados: l.derivados, confianza: l.confianza,
   });
 
   // 1. Por etapa: cada una con su propio inicio y fin reales
@@ -144,6 +154,7 @@ async function cargarLecturas(cicloRef: DocumentReference): Promise<LecturaCruda
       etapa: String(d.etapa ?? ""),
       valores: d.valores as Record<string, number | null> | undefined,
       derivados: d.derivados as Record<string, number> | undefined,
+      confianza: d.confianza as Record<string, Confianza> | undefined,
     };
   }).filter((l) => !Number.isNaN(l.ts.getTime()));
 }

@@ -1,8 +1,8 @@
 /**
  * Encoder WQS-LB (Dragino): inverso de wqsDecoder para FPort 2, formato B
- * (firmware 1.2.x), con la configuración de sondas de este proyecto:
- * DR-TS1 (turbidez), DR-ECK10.0 (EC_K10 + temperatura), DR-PH01 (pH +
- * temperatura) y el DS18B20 externo.
+ * (firmware 1.2.x). El equipo comprado lleva DR-PH01 (pH + temperatura) y
+ * DR-ECK1.0 (EC_K1 + temperatura), sin turbidez ni DS18B20; el encoder admite
+ * además DR-TS1 y DR-ECK10.0 para los tests del decoder.
  *
  * Solo lo usa el simulador (scripts/simulador-cip.js) para que las lecturas
  * entren por el mismo camino que un uplink real: frm_payload → ttnUplink →
@@ -20,6 +20,9 @@ export type DatosWqsFPort2 = {
   turbidez?: number;
   ecK10?: number;
   ecK10Temp?: number;
+  /** DR-ECK1.0: µS/cm sin divisor (×1), igual que el decoder. */
+  ecK1?: number;
+  ecK1Temp?: number;
   ph?: number;
   phTemp?: number;
 };
@@ -29,6 +32,7 @@ const SENTINEL_TEMP_DESCONECTADA = 0x0ccc;
 // Bits del flag y escalas: los mismos que SONDAS en wqsDecoder.ts.
 const BIT_TURBIDEZ = 5;
 const BIT_EC_K10 = 2;
+const BIT_EC_K1 = 1;
 const BIT_PH = 0;
 
 export function encodeWqsFPort2(d: DatosWqsFPort2): Uint8Array {
@@ -44,7 +48,7 @@ export function encodeWqsFPort2(d: DatosWqsFPort2): Uint8Array {
   const posFlag = out.length;
   out.push(0); // se completa al final
 
-  // Orden fijo por bit descendente: turbidez (5), EC_K10 (2), pH (0)
+  // Orden fijo por bit descendente: turbidez (5), EC_K10 (2), EC_K1 (1), pH (0)
   if (d.turbidez !== undefined) {
     flag |= 1 << BIT_TURBIDEZ;
     escribirUint16(out, Math.round(d.turbidez * 10), "turbidez");
@@ -53,6 +57,11 @@ export function encodeWqsFPort2(d: DatosWqsFPort2): Uint8Array {
     flag |= 1 << BIT_EC_K10;
     escribirUint16(out, Math.round(d.ecK10 / 10), "ecK10");
     escribirInt16(out, Math.round(requerido(d.ecK10Temp, "ecK10Temp") * 10), "ecK10Temp");
+  }
+  if (d.ecK1 !== undefined) {
+    flag |= 1 << BIT_EC_K1;
+    escribirUint16(out, Math.round(d.ecK1), "ecK1");
+    escribirInt16(out, Math.round(requerido(d.ecK1Temp, "ecK1Temp") * 10), "ecK1Temp");
   }
   if (d.ph !== undefined) {
     flag |= 1 << BIT_PH;

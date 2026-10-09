@@ -1,64 +1,56 @@
 import { describe, expect, it } from "vitest";
 import {
-  RECETA_DEFECTO, duracionReceta, escalarReceta, estadoEn, etapaEn, instantesUplink,
-  Escenario, Receta,
+  RECETA_DEFECTO, datosUplinkWqs, duracionReceta, escalarReceta, estadoEn, etapaEn,
+  instantesUplink, Escenario, Receta,
 } from "./modeloCip";
 import { encodeWqsFPort2 } from "../wqsEncoder";
 import { decodeWqs } from "../wqsDecoder";
-import { validarYLimpiarValores } from "../ingest";
+import { mapearAValores } from "../mapeoWqs";
+import { alertasDeLectura, validarYLimpiarValores } from "../ingest";
 import { derivarLectura } from "../calculos";
-import { ETAPAS, ETAPAS_MONITOREADAS, PARAMS_DEFECTO, Sonda, Variable, fueraDeRango } from "../types";
+import { ETAPAS, ETAPAS_MONITOREADAS, PARAMS_DEFECTO, Sonda, Variable } from "../types";
 
-// Configuración de seed.js: sondas de wqs-lb-01 y umbrales de proceso
+// Configuración de seed.js: sondas de wqs-lb-01 (equipo comprado) y umbrales
 const SONDAS_SEED: Record<string, Sonda> = {
-  s1: { sondaId: "s1", modelo: "DR-PH01",    activa: true },
-  s2: { sondaId: "s2", modelo: "DR-ECK10.0", activa: true },
-  s3: { sondaId: "s3", modelo: "DR-TS1",     activa: true },
-  s4: { sondaId: "s4", modelo: "DS18B20",    activa: true },
+  s1: { sondaId: "s1", modelo: "DR-PH01",   activa: true },
+  s2: { sondaId: "s2", modelo: "DR-ECK1.0", activa: true },
 };
-const INICIAL = { ph: { min: 5, max: 11 }, turbidez: { max: 60 }, conductividad25C: { max: 3000 } };
-const LIMPIO = { ph: { min: 6, max: 8.5 }, turbidez: { max: 20 }, conductividad25C: { max: 300 } };
+const INICIAL = { ph: { min: 5, max: 11 }, conductividad25C: { max: 1500 } };
+const LIMPIO = { ph: { min: 6, max: 8.5 }, conductividad25C: { max: 300 } };
 const UMBRALES_SEED: Record<string, Record<string, { min?: number; max?: number }>> = {
   preenjuague: INICIAL, enjuague: INICIAL, enjuague_final: LIMPIO,
 };
 
 /**
  * Lo que el backend haría con el uplink en t, sin Firestore: encoder →
- * decodeWqs (fw 1.2) → mapeo de lorawanAdapter.ts → validación física de
- * ingest.ts → derivados de calculos.ts.
+ * decodeWqs (fw 1.2) → mapeo de ttnUplink (mapeoWqs.ts) → validación física de
+ * ingest.ts → derivados de calculos.ts → alertas de ingest.ts.
  */
 function lecturaComoBackend(t: number, receta: Receta, escenario: Escenario) {
   const { estadoProceso, sondas } = estadoEn(t, receta, escenario);
-  const r = decodeWqs(encodeWqsFPort2({
-    bateriaV: 3.6, tempExterna: sondas.tempExterna, turbidez: sondas.turbidez,
-    ecK10: sondas.conductividad, ecK10Temp: sondas.tempEc, ph: sondas.ph, phTemp: sondas.tempSonda,
-  }), 2, "1.2");
+  const r = decodeWqs(encodeWqsFPort2(datosUplinkWqs(sondas, 3.6)), 2, "1.2");
   if (!r.ok || r.fPort !== 2) throw new Error("no decodificó");
-  const d = r.datos;
-  // Mismo mapeo que CAMPO_A_VARIABLE en lorawanAdapter.ts
-  const valores = {
-    ph: d.ph, tempSonda: d.phTemp, turbidez: d.turbidez,
-    conductividad: d.ecK10, tempEc: d.ecK10Temp, tempExterna: d.tempExterna,
-  };
-  const v = validarYLimpiarValores(valores, SONDAS_SEED);
+  const v = validarYLimpiarValores(mapearAValores(r.datos, SONDAS_SEED), SONDAS_SEED);
   if (!v.ok) throw new Error(v.error);
   const numericos: Partial<Record<Variable, number>> = {};
   for (const [k, n] of Object.entries(v.limpios)) if (typeof n === "number") numericos[k as Variable] = n;
-  const { derivados } = derivarLectura(numericos, PARAMS_DEFECTO);
-  return { etapa: estadoProceso.etapa, limpios: v.limpios, descartadas: v.descartadas,
-           evaluables: { ...numericos, ...derivados } as Record<string, number> };
+  const d = derivarLectura(numericos, PARAMS_DEFECTO, v.confianza);
+  const confianza = { ...v.confianza, ...d.confianza };
+  const etapa = estadoProceso.etapa;
+  const alertas = alertasDeLectura({
+    etapa, numericos, derivados: d.derivados, confianza,
+    rangos: UMBRALES_SEED[etapa] ?? {}, sondas: SONDAS_SEED,
+  });
+  return { etapa, limpios: v.limpios, descartadas: v.descartadas, confianza, alertas,
+           crudo: sondas.conductividad,
+           evaluables: { ...numericos, ...d.derivados } as Record<string, number> };
 }
 
 function alertasDe(escenario: Escenario) {
-  const alertas: string[] = [];
-  for (const t of instantesUplink(RECETA_DEFECTO)) {
+  return instantesUplink(RECETA_DEFECTO).flatMap((t) => {
     const l = lecturaComoBackend(t, RECETA_DEFECTO, escenario);
-    const rangos = UMBRALES_SEED[l.etapa] ?? {};
-    for (const [v, valor] of Object.entries(l.evaluables)) {
-      if (fueraDeRango(valor, rangos[v])) alertas.push(`${l.etapa}/${v}@${t}s=${valor}`);
-    }
-  }
-  return alertas;
+    return l.alertas.map((a) => `${l.etapa}/${a.clave}@${t}s=${a.valor}`);
+  });
 }
 
 describe("receta", () => {
@@ -188,7 +180,29 @@ describe("estadoEn — sondas por el camino real del backend", () => {
     const u = instantesUplink(RECETA_DEFECTO).filter((t) => etapaEn(t, RECETA_DEFECTO).etapa === "enjuague_final");
     const l = lecturaComoBackend(u[u.length - 1], RECETA_DEFECTO, "normal");
     expect(l.evaluables.conductividad25C).toBeLessThanOrEqual(PARAMS_DEFECTO.criterioLimpio.conductividad25C);
-    expect(l.evaluables.turbidez).toBeLessThanOrEqual(PARAMS_DEFECTO.criterioLimpio.turbidez);
+  });
+
+  // DR-ECK1.0 satura en 2000 µS/cm: en los enjuagues el valor CRUDO (no el
+  // compensado) tiene que quedar bajo ese tope, o el escenario normal tendría
+  // alertas de saturación
+  it("en las etapas monitoreadas la conductividad cruda queda bajo el tope de la DR-ECK1.0", () => {
+    for (const e of ["normal", "falla"] as const) {
+      for (const t of instantesUplink(RECETA_DEFECTO)) {
+        if (!ETAPAS_MONITOREADAS.includes(etapaEn(t, RECETA_DEFECTO).etapa)) continue;
+        const l = lecturaComoBackend(t, RECETA_DEFECTO, e);
+        expect(l.crudo).toBeLessThan(1900);   // margen sobre el tope de 2000
+        expect(l.confianza.conductividad).toBe("medido");
+      }
+    }
+  });
+
+  it("primer uplink del enjuague: ~1450 µS/cm crudo y ~1060 a 25 °C, bajo el umbral de 1500", () => {
+    const l = lecturaComoBackend(115, RECETA_DEFECTO, "normal");
+    expect(l.etapa).toBe("enjuague");
+    expect(l.crudo).toBeGreaterThan(1300);
+    expect(l.crudo).toBeLessThan(1600);
+    expect(l.evaluables.conductividad25C).toBeGreaterThan(950);
+    expect(l.evaluables.conductividad25C).toBeLessThan(1200);
   });
 
   it("escenario normal: el enjuague final empieza cerca de 280 µS/cm y cruza el criterio (200) a mitad de etapa", () => {
@@ -203,14 +217,10 @@ describe("estadoEn — sondas por el camino real del backend", () => {
     expect(cruce).toBeLessThanOrEqual(etapa.duracionS * 0.6);
   });
 
-  it("en los enjuagues la conductividad cae hacia el agua de red y la turbidez baja", () => {
+  it("en los enjuagues la conductividad cae hacia el agua de red", () => {
     const u = instantesUplink(RECETA_DEFECTO).filter((t) => etapaEn(t, RECETA_DEFECTO).etapa === "enjuague");
     const ec = u.map((t) => lecturaComoBackend(t, RECETA_DEFECTO, "normal").evaluables.conductividad25C);
-    const tu = u.map((t) => lecturaComoBackend(t, RECETA_DEFECTO, "normal").evaluables.turbidez);
-    for (let i = 1; i < ec.length; i++) {
-      expect(ec[i]).toBeLessThan(ec[i - 1]);
-      expect(tu[i]).toBeLessThan(tu[i - 1]);
-    }
+    for (let i = 1; i < ec.length; i++) expect(ec[i]).toBeLessThan(ec[i - 1]);
     expect(ec[ec.length - 1]).toBeLessThan(PARAMS_DEFECTO.conductividadAguaRed * 1.5);
   });
 
@@ -223,16 +233,19 @@ describe("estadoEn — sondas por el camino real del backend", () => {
     expect(ultima.evaluables.conductividad25C).toBeGreaterThan(PARAMS_DEFECTO.criterioLimpio.conductividad25C);
   });
 
-  // Comportamiento aceptado: el ingest no revisa tempMaxOperacion, así que pH y
-  // turbidez de las etapas químicas se guardan (PENDIENTES-DASHBOARD.md, punto 4)
-  it("etapas químicas en régimen: se descartan conductividad y temperaturas de sonda; pH y turbidez se guardan", () => {
-    for (const t of [95, 195]) {   // alcalino y ácido, ya en temperatura
+  // PENDIENTES-DASHBOARD.md, punto 4: sobre 60 °C las sondas quedan fuera de
+  // operación. Se guardan marcadas en vez de descartarse, y no alertan.
+  it("etapas químicas en régimen: todo se guarda, marcado saturado o fuera de operación", () => {
+    for (const t of [95, 195]) {   // alcalino (~76 °C) y ácido (~62 °C), ya en temperatura
       const l = lecturaComoBackend(t, RECETA_DEFECTO, "normal");
-      expect(Object.keys(l.descartadas).sort()).toEqual(["conductividad", "tempEc", "tempSonda"]);
-      expect(l.limpios.ph).toBeDefined();
-      expect(l.limpios.turbidez).toBeDefined();
-      expect(l.limpios.tempExterna).toBeDefined();
+      expect(l.descartadas).toEqual({});
+      expect(l.limpios.conductividad).toBe(2000);
+      expect(l.confianza.conductividad).toBe("fuera_de_operacion");
+      expect(l.confianza.ph).toBe("fuera_de_operacion");
+      expect(l.confianza.tempEc).toBe("saturado");
+      expect(l.limpios.tempExterna).toBeNull();   // DS18B20 no instalado
       expect(l.evaluables.conductividad25C).toBeUndefined();
+      expect(l.alertas).toEqual([]);
     }
   });
 

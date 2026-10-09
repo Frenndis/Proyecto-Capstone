@@ -23,10 +23,16 @@
  * Escenario "falla": en el enjuague final la conductividad se estanca sobre el
  * umbral (como con agua de red contaminada o una válvula de químico con fuga):
  * se disparan alertas y no se alcanza criterioLimpio.
+ *
+ * Sondas: las del equipo comprado, DR-PH01 y DR-ECK1.0 (0–2000 µS/cm), sin
+ * turbidez ni DS18B20. En los enjuagues la conductividad CRUDA queda bajo 2000;
+ * en las etapas químicas la sonda satura y opera sobre 60 °C, y el backend lo
+ * marca (saturado / fuera_de_operacion) en vez de descartarlo.
  */
 import {
   DestinoRetorno, Etapa, EstadoFisico, OrigenCircuito, PARAMS_DEFECTO, ParamsCalculo,
 } from "../types";
+import { DatosWqsFPort2 } from "../wqsEncoder";
 
 // ── Receta ─────────────────────────────────────────────────────
 export type PasoReceta = { etapa: Etapa; duracionS: number };
@@ -175,7 +181,7 @@ function litrosEnviados(tE: number, duracion: number, caudalNominal: number): nu
 }
 
 // ── Variables de calidad en el retorno (por etapa) ─────────────
-type Calidad = { ec25: number; ph: number; turbidez: number };
+type Calidad = { ec25: number; ph: number };
 
 const relajar = (desde: number, hacia: number, tE: number, tau: number) =>
   hacia + (desde - hacia) * Math.exp(-tE / tau);
@@ -192,11 +198,11 @@ function calidadEtapa(
 ): Calidad {
   switch (etapa) {
     case "preenjuague":
-      // Agua recuperada que arrastra el residuo de producto (leche)
+      // Agua recuperada que arrastra el residuo de producto (leche). El primer
+      // uplink (5 s) queda cerca de 1000 µS/cm, bajo el umbral de 1500.
       return {
-        ec25: 300 + 1400 * Math.exp(-tE / 12),
+        ec25: 300 + 1100 * Math.exp(-tE / 12),
         ph: 7.4 - 0.5 * Math.exp(-tE / 8),
-        turbidez: 8 + 50 * Math.exp(-tE / 10),
       };
     case "alcalino": {
       // Frente de solución que llega al retorno
@@ -204,23 +210,23 @@ function calidadEtapa(
       return {
         ec25: previa.ec25 * (1 - f) + SODA.conc * SODA.ecPorPct * f,
         ph: phPorArrastre(previa.ph, 13.2, f),
-        turbidez: 12 + 40 * f * Math.exp(-tE / 25),
       };
     }
     case "enjuague": {
-      // Arrastre rápido (frente de soda) + cola lenta hacia el agua de red
-      const cola = 1500;
+      // Arrastre rápido (frente de soda) + cola lenta hacia el agua de red. El
+      // primer uplink (5 s, ~43 °C) llega cerca de 1060 µS/cm a 25 °C y ~1450
+      // crudo: bajo el umbral (1500) y bajo el tope de la DR-ECK1.0 (2000).
+      const cola = 700;
       const rapido = Math.max(0, previa.ec25 - ecRed - cola);
-      const ec25 = ecRed + rapido * Math.exp(-tE / 1.2) + cola * Math.exp(-tE / 8);
+      const ec25 = ecRed + rapido * Math.exp(-tE / 1.0) + cola * Math.exp(-tE / 8);
       const fr = (ec25 - ecRed) / Math.max(1, previa.ec25 - ecRed);
-      return { ec25, ph: phPorArrastre(7.3, previa.ph, fr), turbidez: relajar(previa.turbidez, 3, tE, 10) };
+      return { ec25, ph: phPorArrastre(7.3, previa.ph, fr) };
     }
     case "acido": {
       const f = 1 - Math.exp(-tE / 2);
       return {
         ec25: previa.ec25 * (1 - f) + ACIDO.conc * ACIDO.ecPorPct * f,
         ph: phPorArrastre(previa.ph, 1.6, f),
-        turbidez: 4 + 8 * f * Math.exp(-tE / 20),
       };
     }
     case "enjuague_final": {
@@ -233,14 +239,13 @@ function calidadEtapa(
       const rapido = Math.max(0, previa.ec25 - piso - cola);
       const ec25 = piso + rapido * Math.exp(-tE / 0.6) + cola * Math.exp(-tE / 28.8);
       const fr = (ec25 - piso) / Math.max(1, previa.ec25 - piso);
-      return { ec25, ph: phPorArrastre(7.2, previa.ph, fr), turbidez: relajar(previa.turbidez, 2, tE, 10) };
+      return { ec25, ph: phPorArrastre(7.2, previa.ph, fr) };
     }
     case "desinfeccion": {
       const f = 1 - Math.exp(-tE / 2);
       return {
         ec25: previa.ec25 * (1 - f) + DESINF.ec25 * f,
         ph: previa.ph + (DESINF.ph - previa.ph) * f,
-        turbidez: relajar(previa.turbidez, 2, tE, 3),
       };
     }
   }
@@ -258,11 +263,31 @@ export const PARAMS_MODELO_DEFECTO: ParamsModelo = {
   semilla: 2026,
 };
 
-/** Lo que mediría el WQS-LB (antes de cuantizar: eso lo hace el encoder). */
+/**
+ * Lo que mediría el WQS-LB con DR-PH01 + DR-ECK1.0 (antes de cuantizar: eso lo
+ * hace el encoder). `conductividad` es el valor real del líquido, sin el tope
+ * de la sonda: el que recorta y marca "saturado" es el backend.
+ */
 export type LecturaSondas = {
-  ph: number; conductividad: number; tempEc: number;
-  turbidez: number; tempSonda: number; tempExterna: number;
+  ph: number; tempSonda: number; conductividad: number; tempEc: number;
 };
+
+/** Máximo que cabe en el campo de 16 bits del payload (EC_K1 va sin divisor). */
+const TOPE_16_BITS = 0xffff;
+
+/**
+ * Datos del uplink FPort 2 del equipo comprado: EC_K1 (DR-ECK1.0), pH
+ * (DR-PH01) y el DS18B20 desconectado (centinela). La conductividad de las
+ * etapas químicas (> 65 535 µS/cm) se acota a lo que cabe en el payload; igual
+ * queda sobre el tope de la sonda, que es lo que el backend tiene que detectar.
+ */
+export function datosUplinkWqs(s: LecturaSondas, bateriaV: number): DatosWqsFPort2 {
+  return {
+    bateriaV, tempExterna: null,
+    ecK1: Math.min(s.conductividad, TOPE_16_BITS), ecK1Temp: s.tempEc,
+    ph: s.ph, phTemp: s.tempSonda,
+  };
+}
 
 /** Unidades: aguaTotal y aguaRecuperada en m³; soda y acido en litros (ver Consumos en types.ts). */
 export type ConsumosCalculados = { aguaTotal: number; aguaRecuperada: number; soda: number; acido: number };
@@ -307,7 +332,7 @@ export function estadoEn(
   // Recorre las etapas ya terminadas: arrastre de temperatura/calidad y volúmenes
   let arrastre: Arrastre = {
     tempIda: TEMP_AMBIENTE + 5, tempRetorno: TEMP_AMBIENTE + 5,
-    calidad: { ec25: ecRed, ph: 7.2, turbidez: 5 },
+    calidad: { ec25: ecRed, ph: 7.2 },
   };
   const litros = { red: 0, recuperadaUsada: 0, recuperadaDevuelta: 0, soda: 0, acido: 0 };
   const sumarVolumenes = (p: PasoReceta, tE: number) => {
@@ -391,11 +416,9 @@ export function estadoEn(
     },
     sondas: {
       ph: Math.max(0, Math.min(14, calidad.ph + ruido(s, 10, tc, 0.03))),
+      tempSonda: tempRetorno - 0.3 + ruido(s, 12, tc, 0.2),
       conductividad: Math.max(0, conductividad),
       tempEc,
-      turbidez: Math.max(0, calidad.turbidez * (1 + ruido(s, 11, tc, 0.03))),
-      tempSonda: tempRetorno - 0.3 + ruido(s, 12, tc, 0.2),
-      tempExterna: tempRetorno - 0.8 + ruido(s, 13, tc, 0.2),
     },
     consumos: {
       aguaTotal: redondear(litros.red / 1000, 3),

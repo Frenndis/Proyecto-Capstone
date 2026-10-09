@@ -57,6 +57,26 @@ describe("encodeWqsFPort2 — inverso de decodeWqs (FPort 2, formato B)", () => 
     }).ecK10).toBe(90000);
   });
 
+  // Configuración comprada: DR-PH01 + DR-ECK1.0, DS18B20 desconectado
+  it("ida y vuelta con DR-ECK1.0 y DR-PH01, sin turbidez ni DS18B20", () => {
+    const d = { bateriaV: 3.6, tempExterna: null, ecK1: 1450, ecK1Temp: 43.2, ph: 8.9, phTemp: 42.9 };
+    expect(idaYVuelta(d)).toEqual(d);
+  });
+
+  // Manual, ejemplo de datalog: 0x013E = 318 µS/cm (EC_K1 sin divisor)
+  it("EC_K1 va sin divisor: 318 µS/cm se codifica 0x013E (bit 1 del flag)", () => {
+    const bytes = encodeWqsFPort2({ bateriaV: 3.6, tempExterna: null, ecK1: 318, ecK1Temp: 20 });
+    expect(bytesToHex(bytes).toUpperCase()).toBe("0E100CCC02013E00C8");
+    expect(idaYVuelta({ bateriaV: 3.6, tempExterna: null, ecK1: 318, ecK1Temp: 20 }).ecK1).toBe(318);
+  });
+
+  it("EC_K1 cuantiza a 1 µS/cm y admite hasta 65 535 (lo que reporta una sonda saturada)", () => {
+    const base = { bateriaV: 3.6, tempExterna: null, ecK1Temp: 20 };
+    expect(idaYVuelta({ ...base, ecK1: 1234.4 }).ecK1).toBe(1234);
+    expect(idaYVuelta({ ...base, ecK1: 65535 }).ecK1).toBe(65535);
+    expect(() => encodeWqsFPort2({ ...base, ecK1: 65536 })).toThrow(/ecK1/);
+  });
+
   it("rechaza valores que no caben en 16 bits", () => {
     expect(() => encodeWqsFPort2({ bateriaV: 3.6, tempExterna: 20, turbidez: 7000 })).toThrow(/turbidez/);
   });
