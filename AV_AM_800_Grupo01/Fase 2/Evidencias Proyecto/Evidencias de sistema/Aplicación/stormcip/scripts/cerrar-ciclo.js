@@ -70,7 +70,7 @@ const db = getFirestore();
     // El trigger solo se dispara en la TRANSICIÓN a finalizado. Para un ciclo
     // ya cerrado, el camino es la bandera de recálculo.
     console.log(`El ciclo ya está finalizado. Para recalcular sus indicadores:`);
-    console.log(`  node recalcular.js ${cicloId}`);
+    console.log(`  node recalcular.js ${cicloId}${PROD ? ` --prod --project ${PROYECTO_PROD}` : ""}`);
     return;
   }
 
