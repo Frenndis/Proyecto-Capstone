@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SIN_UMBRAL, estadoIndicadores, formatear, formatearRango } from "./tipos";
+import { SIN_UMBRAL, estaDetenido, estadoIndicadores, formatear, formatearRango } from "./tipos";
 
 // Marca de tiempo: en el front llega como Timestamp de Firestore, pero
 // estadoIndicadores solo comprueba que exista, así que cualquier valor sirve.
@@ -108,5 +108,27 @@ describe("formatearRango", () => {
   it("acepta 0 como límite válido", () => {
     expect(formatearRango({ min: 0 })).toBe("≥ 0");
     expect(formatearRango({ min: 0, max: 0 })).toBe("0–0");
+  });
+});
+
+describe("estaDetenido", () => {
+  const marca = (ms: number) => ({ toDate: () => new Date(ms) });
+  const AHORA = Date.UTC(2026, 9, 9, 12, 0, 0);
+
+  it("no está detenido si se actualizó hace menos de 10 s", () => {
+    expect(estaDetenido(marca(AHORA - 9_000), AHORA)).toBe(false);
+  });
+
+  it("está detenido si pasaron más de 10 s", () => {
+    expect(estaDetenido(marca(AHORA - 11_000), AHORA)).toBe(true);
+  });
+
+  // serverTimestamp recién escrito: el listener local lo ve null un instante
+  it("null (serverTimestamp sin confirmar) cuenta como recién escrito", () => {
+    expect(estaDetenido(null, AHORA)).toBe(false);
+  });
+
+  it("sin marca de tiempo se considera detenido", () => {
+    expect(estaDetenido(undefined, AHORA)).toBe(true);
   });
 });

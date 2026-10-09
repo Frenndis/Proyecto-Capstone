@@ -35,6 +35,8 @@ export type IndicadoresEtapa = {
 export type Ciclo = {
   id: string; plantaId: string; lineaId: string; camion: string;
   programa: string; estado: string; etapaActual: string; inicio: any; fin?: any;
+  // Unidades: aguaTotal y aguaRecuperada en m³; soda y acido en litros de
+  // solución de trabajo consumidos (baja neta del estanque).
   consumos?: { aguaTotal: number; aguaRecuperada: number; soda: number; acido: number };
   indicadores?: Record<string, number>;                     // derivados del ciclo cerrado
   indicadoresMetodo?: Record<string, string>;               // fórmula usada en cada uno
@@ -46,6 +48,51 @@ export type Ciclo = {
   indicadoresCalculadosEn?: MarcaTiempo | null;             // marca de que el trigger corrió
   ultimaLectura?: Record<string, UltimaLecturaDispositivo>; // anidada por deviceId
 };
+
+// Estado de planta en vivo (estadoProceso/{lineaId}): lo que vendría del PLC.
+// Un documento por línea, sobrescrito completo en cada tick. Mismo esquema que
+// EstadoProceso en functions/src/types.ts.
+export type EstadoProceso = {
+  v: number; lineaId: string; cicloId: string; simulado: boolean; fuente: string;
+  actualizadoEn: MarcaTiempo | null;   // null: serverTimestamp aún sin confirmar
+  estadoCiclo: "en_curso" | "finalizado" | "abortado";
+  etapa: string; etapaInicio: MarcaTiempo | null; etapaDuracionS: number;
+  progresoEtapa: number;               // 0–1
+  cicloDuracionS: number; transcurridoS: number;
+  instrumentos: {
+    tempIda: number;                   // °C
+    concentracion: number;             // %
+    caudal: number;                    // m³/h
+    presion: number;                   // bar
+  };
+  estanques: {
+    soda:  { nivel: number; temp: number; concentracion: number };  // nivel %, °C, %
+    acido: { nivel: number; temp: number; concentracion: number };
+    aguaRecuperada: { nivel: number };                              // nivel %
+  };
+  circuito: {
+    origen: "soda" | "acido" | "agua_red" | "agua_recuperada";
+    destinoRetorno: "recirculacion" | "drenaje" | "recuperacion";
+    bomba: { encendida: boolean; rpm: number };
+  };
+};
+
+/** Sin actualización por más de esto, estadoProceso se considera detenido. */
+export const UMBRAL_DETENIDO_MS = 10_000;
+
+/**
+ * true si estadoProceso no se actualiza hace más de `umbralMs`. Un
+ * serverTimestamp aún sin confirmar (null) cuenta como recién escrito.
+ */
+export function estaDetenido(
+  actualizadoEn: EstadoProceso["actualizadoEn"] | undefined,
+  ahoraMs: number,
+  umbralMs = UMBRAL_DETENIDO_MS,
+) {
+  if (actualizadoEn === null) return false;
+  if (!actualizadoEn?.toDate) return true;
+  return ahoraMs - actualizadoEn.toDate().getTime() > umbralMs;
+}
 
 // Una alerta por ciclo+etapa+variable: se actualiza mientras la condición dura
 export type Alerta = {

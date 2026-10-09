@@ -155,7 +155,58 @@ export type Ciclo = {
   indicadoresCalculadosEn?: any;
   /** Bandera de mantenimiento: dispara el recálculo y la borra el trigger. */
   recalcular?: boolean;
-  consumos?: { aguaTotal?: number; aguaRecuperada?: number; soda?: number; acido?: number };
+  consumos?: Consumos;
+};
+
+/**
+ * Consumos acumulados del ciclo (ciclos/{id}.consumos). Unidades:
+ *  - aguaTotal:      m³ de agua de red.
+ *  - aguaRecuperada: m³ de agua recuperada reutilizada (preenjuague).
+ *  - soda, acido:    litros de solución de trabajo consumidos (baja neta del estanque).
+ */
+export type Consumos = { aguaTotal?: number; aguaRecuperada?: number; soda?: number; acido?: number };
+
+// ── Estado de planta en vivo (Firestore: estadoProceso/{lineaId}) ──
+// Lo que en la planta real vendría del PLC. Un documento por línea que se
+// sobrescribe completo en cada tick, sin historial. Solo lo escribe el backend
+// (hoy, scripts/simulador-cip.js con Admin SDK).
+export const ESTADO_PROCESO_VERSION = 1;
+
+export type OrigenCircuito = "soda" | "acido" | "agua_red" | "agua_recuperada";
+export type DestinoRetorno = "recirculacion" | "drenaje" | "recuperacion";
+
+/** Parte física del estado: la calcula el modelo (simulacion/modeloCip.ts). */
+export type EstadoFisico = {
+  etapa: Etapa;
+  etapaDuracionS: number;
+  progresoEtapa: number;     // 0–1
+  cicloDuracionS: number;
+  transcurridoS: number;
+  instrumentos: {
+    tempIda: number;         // °C, temperatura de ida
+    concentracion: number;   // % de químico en la ida (0 en enjuagues)
+    caudal: number;          // m³/h
+    presion: number;         // bar
+  };
+  estanques: {
+    soda:  { nivel: number; temp: number; concentracion: number };  // nivel %, °C, %
+    acido: { nivel: number; temp: number; concentracion: number };
+    aguaRecuperada: { nivel: number };                              // nivel %
+  };
+  circuito: {
+    origen: OrigenCircuito;
+    destinoRetorno: DestinoRetorno;
+    bomba: { encendida: boolean; rpm: number };
+  };
+};
+
+export type EstadoProceso = EstadoFisico & {
+  v: number; lineaId: string; cicloId: string;
+  simulado: boolean; fuente: string;
+  actualizadoEn: any;        // serverTimestamp: el cliente detecta "detenido" con él
+  /** Permite distinguir un cierre normal o un abort de un simulador que se colgó. */
+  estadoCiclo: "en_curso" | "finalizado" | "abortado";
+  etapaInicio: any;          // Timestamp
 };
 
 // Parámetros de cálculo (Firestore: configuracion/calculos)

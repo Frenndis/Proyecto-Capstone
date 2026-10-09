@@ -49,6 +49,11 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow write: if false;
     }
+    // Estado de planta en vivo (PLC / simulador-cip): solo lo escribe el backend
+    match /estadoProceso/{lineaId} {
+      allow read: if canRead();
+      allow write: if false;
+    }
     match /configuracion/{docId} {
       allow read: if canRead();
       allow write: if isAdmin();
