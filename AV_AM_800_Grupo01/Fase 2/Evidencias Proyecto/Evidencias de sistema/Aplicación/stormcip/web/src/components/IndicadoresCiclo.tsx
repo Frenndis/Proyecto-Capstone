@@ -54,6 +54,14 @@ export default function IndicadoresCiclo({ ciclo }: { ciclo: Ciclo }) {
   // Solo las etapas monitoreadas, y en el orden del proceso (no el de Firestore)
   const etapas = ETAPAS_MONITOREADAS.filter((e) => porEtapa[e]);
 
+  // "Tiempo hasta limpio" se muestra siempre: si falta, es justamente el dato
+  // importante (el enjuague final no quedó limpio) y no puede desaparecer.
+  const claves = estado.tipo === "listo" && !estado.claves.includes("tiempoHastaLimpio")
+    ? ["tiempoHastaLimpio", ...estado.claves] : estado.tipo === "listo" ? estado.claves : [];
+  const sinLimpio = porEtapa.enjuague_final
+    ? "El enjuague final no alcanzó el criterio de limpieza."
+    : "Sin lecturas del enjuague final: no se puede evaluar.";
+
   return (
     <section className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
       <h2 className="mb-3 font-medium">Indicadores del ciclo</h2>
@@ -79,7 +87,7 @@ export default function IndicadoresCiclo({ ciclo }: { ciclo: Ciclo }) {
       ) : (
         <>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {estado.claves.map((k) => {
+            {claves.map((k) => {
               const estimado = confianza[k] === "estimado";
               return (
                 <div key={k} className={`rounded-xl border p-3 ${estimado
@@ -101,6 +109,11 @@ export default function IndicadoresCiclo({ ciclo }: { ciclo: Ciclo }) {
                       supuesto" es justo lo que no debe quedar escondido. */}
                   {metodo[k] && (
                     <p className="mt-2 text-[11px] leading-snug text-slate-500">{metodo[k]}</p>
+                  )}
+                  {k === "tiempoHastaLimpio" && typeof ciclo.indicadores?.[k] !== "number" && (
+                    <p className="mt-2 text-[11px] leading-snug text-amber-700 dark:text-amber-300">
+                      {sinLimpio}
+                    </p>
                   )}
                 </div>
               );

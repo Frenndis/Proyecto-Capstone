@@ -95,6 +95,22 @@ export function calcularIndicadoresCiclo(
     p,
   );
 
+  // tiempoHastaLimpio global = el del enjuague final. Sobre todas las lecturas
+  // monitoreadas tomaba la primera lectura limpia de cualquier etapa: un
+  // enjuague intermedio limpio "aprobaba" un ciclo cuyo enjuague final quedó
+  // sucio. Sin lecturas del enjuague final, o si nunca cumple el criterio, el
+  // global queda sin valor.
+  const final = porEtapa.enjuague_final;
+  if (typeof final?.derivados.tiempoHastaLimpio === "number") {
+    global.derivados.tiempoHastaLimpio = final.derivados.tiempoHastaLimpio;
+    global.metodo.tiempoHastaLimpio = `enjuague final: ${final.metodo.tiempoHastaLimpio}, desde su primera lectura`;
+    global.confianza.tiempoHastaLimpio = final.confianza.tiempoHastaLimpio;
+  } else {
+    delete global.derivados.tiempoHastaLimpio;
+    delete global.metodo.tiempoHastaLimpio;
+    delete global.confianza.tiempoHastaLimpio;
+  }
+
   if (hayVolumen) {
     global.derivados.volumenEstimado = +volumenTotal.toFixed(3);
     global.metodo.volumenEstimado =

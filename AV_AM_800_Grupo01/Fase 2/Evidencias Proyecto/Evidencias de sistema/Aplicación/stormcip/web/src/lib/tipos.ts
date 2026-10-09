@@ -70,6 +70,7 @@ export const META: Record<string, { label: string; unidad: string; decimales?: n
   nivel:         { label: "Nivel",          unidad: "%",     decimales: 0 },
   // Derivadas (las calcula el backend, ver calculos.ts)
   conductividad25C:       { label: "Conductividad a 25 °C", unidad: "µS/cm",     decimales: 0 },
+  // En el global se mide sobre el enjuague final (ciclos.ts); por etapa, sobre cada etapa
   tiempoHastaLimpio:      { label: "Tiempo hasta limpio",   unidad: "s",         decimales: 0 },
   arrastreQuimico:        { label: "Arrastre químico",      unidad: "µS/cm",     decimales: 0 },
   // "µS/cm·min" se lee como producto; el indicador es una tasa POR minuto.

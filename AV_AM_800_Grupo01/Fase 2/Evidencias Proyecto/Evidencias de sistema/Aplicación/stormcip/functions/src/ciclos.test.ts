@@ -5,19 +5,71 @@ import { PARAMS_DEFECTO } from "./types";
 const t = (min: number) => new Date(Date.UTC(2026, 9, 1, 10, min, 0));
 
 // Enjuague que arranca sucio (arrastre de soda) y baja hasta el criterio limpio.
-// PARAMS_DEFECTO: aguaRed 150 µS/cm, criterio limpio 300 µS/cm y 20 NTU.
+// PARAMS_DEFECTO: aguaRed 150 µS/cm, criterio limpio 200 µS/cm y 10 NTU.
 const ENJUAGUE: LecturaCruda[] = [
   { ts: t(0),  etapa: "enjuague", valores: { turbidez: 50 }, derivados: { conductividad25C: 1200 } },
   { ts: t(5),  etapa: "enjuague", valores: { turbidez: 30 }, derivados: { conductividad25C: 700 } },
-  { ts: t(10), etapa: "enjuague", valores: { turbidez: 10 }, derivados: { conductividad25C: 250 } },
+  { ts: t(10), etapa: "enjuague", valores: { turbidez: 10 }, derivados: { conductividad25C: 180 } },
 ];
 
+const lectura = (min: number, etapa: string, ec25: number, turbidez = 5): LecturaCruda =>
+  ({ ts: t(min), etapa, valores: { turbidez }, derivados: { conductividad25C: ec25 } });
+
 describe("calcularIndicadoresCiclo", () => {
-  it("calcula tiempo hasta limpio desde la primera lectura de la etapa", () => {
+  it("calcula tiempo hasta limpio por etapa desde la primera lectura de la etapa", () => {
     const r = calcularIndicadoresCiclo(ENJUAGUE, PARAMS_DEFECTO);
     expect(r.lecturasConsideradas).toBe(3);
     // la tercera lectura (min 10) es la primera que cumple ambos criterios
-    expect(r.global?.derivados.tiempoHastaLimpio).toBe(600);
+    expect(r.porEtapa.enjuague?.derivados.tiempoHastaLimpio).toBe(600);
+  });
+
+  // El global solo mira el enjuague final: es el que decide si el estanque
+  // quedó limpio. Un enjuague intermedio limpio no aprueba el ciclo.
+  it("global sin valor si el enjuague intermedio queda limpio pero el final no", () => {
+    const r = calcularIndicadoresCiclo([
+      ...ENJUAGUE,
+      lectura(60, "enjuague_final", 450), lectura(61, "enjuague_final", 440),
+      lectura(62, "enjuague_final", 455),
+    ], PARAMS_DEFECTO);
+    expect(r.porEtapa.enjuague?.derivados.tiempoHastaLimpio).toBe(600);
+    expect(r.porEtapa.enjuague_final?.derivados.tiempoHastaLimpio).toBeUndefined();
+    expect(r.global?.derivados.tiempoHastaLimpio).toBeUndefined();
+    expect(r.global?.metodo.tiempoHastaLimpio).toBeUndefined();
+    expect(r.global?.confianza.tiempoHastaLimpio).toBeUndefined();
+  });
+
+  it("global = tiempo hasta limpio del enjuague final, desde su primera lectura", () => {
+    const r = calcularIndicadoresCiclo([
+      ...ENJUAGUE,
+      lectura(60, "enjuague_final", 280), lectura(61, "enjuague_final", 230),
+      lectura(62, "enjuague_final", 190),
+    ], PARAMS_DEFECTO);
+    expect(r.global?.derivados.tiempoHastaLimpio).toBe(120);   // min 62 − min 60
+    expect(r.global?.derivados.tiempoHastaLimpio)
+      .toBe(r.porEtapa.enjuague_final?.derivados.tiempoHastaLimpio);
+    expect(r.global?.metodo.tiempoHastaLimpio).toMatch(/^enjuague final:/);
+    expect(r.global?.confianza.tiempoHastaLimpio).toBe("medido");
+  });
+
+  it("global sin valor si no hay lecturas del enjuague final", () => {
+    const r = calcularIndicadoresCiclo(ENJUAGUE, PARAMS_DEFECTO);
+    expect(r.global?.derivados.tiempoHastaLimpio).toBeUndefined();
+  });
+
+  // Separación entre umbral de alerta (300) y criterio de limpieza (200)
+  it("entre 10 y 20 NTU el agua es aceptable pero no limpia, aunque la conductividad cumpla", () => {
+    const r = calcularIndicadoresCiclo([
+      lectura(0, "enjuague_final", 180, 15), lectura(1, "enjuague_final", 170, 12),
+      lectura(2, "enjuague_final", 165, 8),
+    ], PARAMS_DEFECTO);
+    expect(r.global?.derivados.tiempoHastaLimpio).toBe(120);   // recién con 8 NTU
+  });
+
+  it("entre 200 y 300 µS/cm el agua es aceptable pero no limpia", () => {
+    const r = calcularIndicadoresCiclo([
+      lectura(0, "enjuague_final", 280), lectura(1, "enjuague_final", 250),
+    ], PARAMS_DEFECTO);
+    expect(r.global?.derivados.tiempoHastaLimpio).toBeUndefined();
   });
 
   it("calcula el arrastre químico contra la conductividad del agua de red", () => {

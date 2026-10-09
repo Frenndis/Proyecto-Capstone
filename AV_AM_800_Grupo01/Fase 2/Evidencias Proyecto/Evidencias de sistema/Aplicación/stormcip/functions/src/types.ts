@@ -170,7 +170,8 @@ export const PARAMS_DEFECTO: ParamsCalculo = {
   factorCompensacionEC: 0.02,
   conductividadAguaRed: 150,
   caudalNominalM3h: 18,
-  criterioLimpio: { conductividad25C: 300, turbidez: 20 },
+  // Igual que seed.js / seed-prod.js: criterio de limpieza, no umbral de alerta
+  criterioLimpio: { conductividad25C: 200, turbidez: 10 },
 };
 
 export function fueraDeRango(valor: number, r?: Rango) {

@@ -74,7 +74,10 @@ const db = admin.firestore();
     factorCompensacionEC: 0.02,
     conductividadAguaRed: 150,
     caudalNominalM3h: 18,
-    criterioLimpio: { conductividad25C: 300, turbidez: 20 },
+    // Criterio de LIMPIEZA (agua "limpia" para tiempoHastaLimpio), distinto del
+    // umbral de ALERTA de enjuague_final (300 µS/cm y 20 NTU en
+    // configuracion/umbrales): entre ambos el agua es aceptable pero no limpia.
+    criterioLimpio: { conductividad25C: 200, turbidez: 10 },
   });
 
   await db.doc("ciclos/CIP-2026-0001").set({
