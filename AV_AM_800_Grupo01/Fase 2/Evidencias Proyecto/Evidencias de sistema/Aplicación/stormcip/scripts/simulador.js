@@ -121,5 +121,5 @@ const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 
   console.log(`\n${ok} lecturas aceptadas, ${fallos} rechazadas.`);
   console.log("El ciclo sigue en_curso. Para ver los indicadores, cerralo:");
-  console.log(`  node cerrar-ciclo.js ${CICLO_ID}   (con PROJECT_ID y ADC)`);
+  console.log(`  node cerrar-ciclo.js ${CICLO_ID}   (emuladores por defecto)`);
 })();

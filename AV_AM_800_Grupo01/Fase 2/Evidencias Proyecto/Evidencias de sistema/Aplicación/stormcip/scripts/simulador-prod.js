@@ -121,5 +121,5 @@ function lectura(paso) {
   }
   console.log("\nEl ciclo sigue en_curso, asi que el dashboard ya muestra las");
   console.log("tarjetas y la tendencia. Los INDICADORES aparecen al cerrarlo:");
-  console.log(`  node cerrar-ciclo.js ${CICLO_ID}`);
+  console.log(`  node cerrar-ciclo.js ${CICLO_ID} --prod --project stormcip-972bd`);
 })();

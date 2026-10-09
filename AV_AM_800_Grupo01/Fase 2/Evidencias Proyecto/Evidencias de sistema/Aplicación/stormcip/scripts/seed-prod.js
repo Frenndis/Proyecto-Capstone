@@ -48,21 +48,22 @@ const db = admin.firestore();
     devEui: "0000000000000001",
     firmware: "1.2",
     apiKeyHash: crypto.createHash("sha256").update(DEVICE_KEY).digest("hex"),
+    // Equipo comprado: DR-PH01 + DR-ECK1.0 (0–2000 µS/cm), sin turbidez ni DS18B20
     sondas: {
-      s1: { sondaId: "s1", modelo: "DR-PH01",    activa: true },
-      s2: { sondaId: "s2", modelo: "DR-ECK10.0", activa: true },
-      s3: { sondaId: "s3", modelo: "DR-TS1",     activa: true },
-      s4: { sondaId: "s4", modelo: "DS18B20",    activa: true },
+      s1: { sondaId: "s1", modelo: "DR-PH01",   activa: true },
+      s2: { sondaId: "s2", modelo: "DR-ECK1.0", activa: true },
     },
   });
 
   // Umbrales de PROCESO, solo etapas de enjuague (alcance real del hardware).
+  // 1500 µS/cm: bajo el tope de la DR-ECK1.0 y suponiendo que la app compensa la
+  // temperatura (ver seed.js). Sin turbidez: el equipo no la mide.
   // ⚠ Provisionales: confirmar con el cliente.
   const enjuagueInicial = {
-    ph: { min: 5, max: 11 }, turbidez: { max: 60 }, conductividad25C: { max: 3000 },
+    ph: { min: 5, max: 11 }, conductividad25C: { max: 1500 },
   };
   const enjuagueLimpio = {
-    ph: { min: 6, max: 8.5 }, turbidez: { max: 20 }, conductividad25C: { max: 300 },
+    ph: { min: 6, max: 8.5 }, conductividad25C: { max: 300 },
   };
   await db.doc("configuracion/umbrales").set({
     preenjuague: enjuagueInicial,
@@ -75,8 +76,9 @@ const db = admin.firestore();
     conductividadAguaRed: 150,
     caudalNominalM3h: 18,
     // Criterio de LIMPIEZA (agua "limpia" para tiempoHastaLimpio), distinto del
-    // umbral de ALERTA de enjuague_final (300 µS/cm y 20 NTU en
-    // configuracion/umbrales): entre ambos el agua es aceptable pero no limpia.
+    // umbral de ALERTA de enjuague_final (300 µS/cm en configuracion/umbrales):
+    // entre ambos el agua es aceptable pero no limpia. Sin turbidez se ignora
+    // su criterio.
     criterioLimpio: { conductividad25C: 200, turbidez: 10 },
   });
 

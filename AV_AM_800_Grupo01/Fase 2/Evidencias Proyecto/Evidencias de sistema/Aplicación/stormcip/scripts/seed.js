@@ -30,7 +30,8 @@ const db = admin.firestore();
   });
 
   // Unidad WQS-LB con firmware 1.2 (formato B del decoder propio, wqsDecoder.ts) y
-  // las 3 sondas RS485 configuradas + el DS18B20 externo integrado del transmisor.
+  // las sondas del equipo comprado (cotización Altronics COT-2026-1917): DR-PH01
+  // y DR-ECK1.0 (0–2000 µS/cm). Sin turbidez (DR-TS1) ni DS18B20 externo.
   //
   // `sondas` es un MAPA, no un array (ver tipo Sonda en functions/src/types.ts), y
   // cada una necesita `activa: true`: specDe() salta toda sonda sin esa bandera.
@@ -39,10 +40,8 @@ const db = admin.firestore();
     apiKeyHash: crypto.createHash("sha256").update("dev-key-wqs-456").digest("hex"),
     firmware: "1.2",
     sondas: {
-      s1: { sondaId: "s1", modelo: "DR-PH01",    activa: true },
-      s2: { sondaId: "s2", modelo: "DR-ECK10.0", activa: true },
-      s3: { sondaId: "s3", modelo: "DR-TS1",     activa: true },
-      s4: { sondaId: "s4", modelo: "DS18B20",    activa: true },
+      s1: { sondaId: "s1", modelo: "DR-PH01",   activa: true },
+      s2: { sondaId: "s2", modelo: "DR-ECK1.0", activa: true },
     },
   });
 
@@ -52,12 +51,19 @@ const db = admin.firestore();
   //
   // El indicador real de "agua limpia" es conductividad25C, no la conductividad
   // cruda: sin compensar por temperatura dos lecturas no son comparables.
+  //
+  // 1500 µS/cm en preenjuague y enjuague: bajo el tope de la DR-ECK1.0 (2000).
+  // Supone que la APP compensa la temperatura (la sonda entrega el valor crudo):
+  // hasta ~42 °C, una sonda saturada implica EC25 > 1500, así que la alerta de
+  // saturación y la de umbral no se contradicen. Si Dragino confirma que la
+  // sonda ya compensa, hay que revisar este valor. Sin umbrales de turbidez:
+  // el equipo comprado no la mide.
   // ⚠ Provisionales: confirmar con el cliente.
   const enjuagueInicial = {
-    ph: { min: 5, max: 11 }, turbidez: { max: 60 }, conductividad25C: { max: 3000 },
+    ph: { min: 5, max: 11 }, conductividad25C: { max: 1500 },
   };
   const enjuagueLimpio = {
-    ph: { min: 6, max: 8.5 }, turbidez: { max: 20 }, conductividad25C: { max: 300 },
+    ph: { min: 6, max: 8.5 }, conductividad25C: { max: 300 },
   };
   await db.doc("configuracion/umbrales").set({
     preenjuague: enjuagueInicial,
@@ -75,8 +81,9 @@ const db = admin.firestore();
     conductividadAguaRed: 150,
     caudalNominalM3h: 18,
     // Criterio de LIMPIEZA (agua "limpia" para tiempoHastaLimpio), distinto del
-    // umbral de ALERTA de enjuague_final (300 µS/cm y 20 NTU en
-    // configuracion/umbrales): entre ambos el agua es aceptable pero no limpia.
+    // umbral de ALERTA de enjuague_final (300 µS/cm en configuracion/umbrales):
+    // entre ambos el agua es aceptable pero no limpia. El criterio de turbidez
+    // queda definido para un equipo con DR-TS1; sin lecturas de turbidez se ignora.
     criterioLimpio: { conductividad25C: 200, turbidez: 10 },
   });
 

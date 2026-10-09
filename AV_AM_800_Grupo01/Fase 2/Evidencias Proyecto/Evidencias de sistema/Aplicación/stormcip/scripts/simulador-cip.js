@@ -4,7 +4,8 @@
 //    estadoProceso/{lineaId} cada --tick segundos, sobrescrito completo.
 //  - Lecturas de sondas: se codifican como un uplink real del WQS-LB y entran
 //    por ttnUplink, igual que un equipo en terreno (decoder, validación física,
-//    derivados y alertas incluidos).
+//    derivados y alertas incluidos). Configuración del equipo comprado:
+//    DR-PH01 + DR-ECK1.0, sin turbidez ni DS18B20.
 //  - Crea el ciclo al inicio y lo pasa a "finalizado" al terminar, lo que
 //    dispara alCerrarCiclo (indicadores). Ctrl+C lo deja "abortado".
 //  - Si el equipo se suspende o el proceso se bloquea (> 5 s de atraso), el
@@ -168,11 +169,7 @@ function docEstado(r, cicloId, t0, estadoCiclo) {
 
 // ── Uplink por ttnUplink ─────────────────────────────────────
 async function enviarUplink(r, devEui) {
-  const s = r.sondas;
-  const bytes = encoder.encodeWqsFPort2({
-    bateriaV: BATERIA_V, tempExterna: s.tempExterna, turbidez: s.turbidez,
-    ecK10: s.conductividad, ecK10Temp: s.tempEc, ph: s.ph, phTemp: s.tempSonda,
-  });
+  const bytes = encoder.encodeWqsFPort2(modelo.datosUplinkWqs(r.sondas, BATERIA_V));
   const body = {
     end_device_ids: { device_id: DISPOSITIVO, dev_eui: devEui },
     uplink_message: { f_port: 2, frm_payload: Buffer.from(bytes).toString("base64") },
@@ -188,7 +185,7 @@ async function enviarUplink(r, devEui) {
   if (res.status === 401) throw new Error("ttnUplink rechazó el secreto (401): revisa TTN_WEBHOOK_SECRET.");
   let json = {};
   try { json = JSON.parse(texto); } catch { /* respuesta no JSON */ }
-  const descartadas = Object.keys(json.descartadas ?? {});
+  const descartadas = Object.entries(json.descartadas ?? {}).map(([v, m]) => `${v} (${m})`);
   const detalle = json.ignorado ? `ignorado: ${json.motivo}` :
     `alertas ${json.alertas ?? "?"}${descartadas.length ? ` · descartadas ${descartadas.join(", ")}` : ""}`;
   return `${res.status} ${detalle}`;
@@ -224,6 +221,13 @@ function programa(receta) {
   }
   if (!String(dev.get("firmware") ?? "").startsWith("1.2")) {
     salir(`El encoder genera formato de firmware 1.2; ${DISPOSITIVO} tiene firmware ${dev.get("firmware") ?? "sin registrar"}.`);
+  }
+  const modelosActivos = Object.values(dev.get("sondas") ?? {}).filter((s) => s.activa).map((s) => s.modelo);
+  for (const m of ["DR-PH01", "DR-ECK1.0"]) {
+    if (!modelosActivos.includes(m)) {
+      salir(`El simulador envía las sondas del equipo comprado (DR-PH01 + DR-ECK1.0); ` +
+            `${DISPOSITIVO} no tiene ${m} activa (¿seed antiguo? vuelve a correr npm run seed).`);
+    }
   }
   const devEui = dev.get("devEui") ?? DEV_EUI_SIMULADO;
 

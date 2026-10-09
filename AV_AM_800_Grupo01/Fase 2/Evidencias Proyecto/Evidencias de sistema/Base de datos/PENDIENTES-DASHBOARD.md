@@ -66,3 +66,53 @@ Si `min` no existe, imprime "—" y luego "–3000".
 
 **Propuesta futura:** en vez de descartar el valor, guardarlo con confianza `"fuera_de_operacion"` cuando la temperatura medida en la misma lectura supera la `tempMaxOperacion` de la sonda. Así queda el dato para auditoría, pero no se usa en derivados, umbrales ni indicadores, y el dashboard puede mostrarlo atenuado.
 
+> ✅ **Resuelto en el backend** (9 de octubre de 2026): `validarYLimpiarValores` marca `"fuera_de_operacion"` y, sobre el máximo físico, guarda el tope con `"saturado"` en vez de descartar (ver `modelo-datos-sensores.md`, sección 2.3). Falta mostrarlo en el dashboard (punto 10).
+
+---
+
+## 5. Firmware real del nodo y formato 1.3.x
+
+**Qué falta:** confirmar la versión de firmware del WQS-LB comprado con el uplink de estado (FPort 5) o con `AT+VER`. El decoder solo entiende firmware 1.2.x (flag de 1 byte, formato B); con firmware ≥ 1.3.1 el flag pasa a 2 bytes, el mapa de bits no está documentado y **todas las lecturas se rechazan**.
+
+**Estado:** consulta enviada a Dragino por el formato 1.3.x. Hasta tener respuesta, registrar en `dispositivos/{id}.firmware` la versión real (no suponer "1.2").
+
+---
+
+## 6. Modo del gateway Milesight UG65
+
+**Qué falta:** definir si el UG65 trabaja como **reenviador de paquetes** hacia The Things Stack (lo que asume `ttnUplink`: webhook con `frm_payload` y `received_at` en formato TTS) o como **servidor de red propio** (embedded network server). En el segundo caso el formato del webhook cambia y habría que adaptar el adaptador o agregar otro.
+
+---
+
+## 7. Flujómetro SW3L-LB
+
+**Qué falta:** el manual del SW3L-LB-006-AU915 (formato de payload, unidades, intervalo) y verificar que su **rango de caudal y de temperatura** sirva para un CIP (caudales de ~18 m³/h y soluciones a 75–80 °C en el alcalino). Hoy el sistema no lo decodifica: el volumen sigue siendo una estimación con el caudal nominal (`volumenEstimado`, confianza `"estimado"`).
+
+---
+
+## 8. Ubicación de las sondas y calibración
+
+**Qué falta:**
+- **Ubicación física:** la `DR-PH01` y la `DR-ECK1.0` operan hasta **60 °C**. En el retorno del alcalino el líquido llega a ~76 °C y en el ácido a ~62 °C: si las sondas quedan en la línea durante esas etapas, trabajan fuera de su rango de operación (el backend lo marca como `"fuera_de_operacion"`, pero la sonda se puede dañar). Definir con el cliente dónde se instalan (derivación, celda de flujo con válvula, solo en enjuagues).
+- **Soluciones de calibración disponibles localmente:** pH 4,01 / 6,86 / 9,18 y conductividad 1413 µS/cm (dentro del rango de la `DR-ECK1.0`). Confirmar proveedor y procedimiento, y registrar la fecha en `sondas.{id}.ultimaCalibracion`.
+
+---
+
+## 9. Reglas: el operador puede escribir campos del backend en `ciclos`
+
+**Qué pasa:** `firestore.rules` permite al operador actualizar **cualquier** campo de `ciclos/{id}`, incluidos los que solo escribe el backend: `ultimaLectura`, `variablesVistas` e `indicadores*` (y `lecturasConsideradas`, `recalcular`).
+
+**Acción (cuando se definan los permisos del operador):** limitar su `update` con `request.resource.data.diff(resource.data).affectedKeys().hasOnly([...])` a los campos que le correspondan, por ejemplo `etapaActual`, `estado`, `fin` y `consumos`. No se cambió todavía.
+
+---
+
+## 10. Tarjetas del dashboard según las sondas del equipo (propuesta, sin implementar)
+
+**Qué asume hoy el dashboard:** `web/src/app/dashboard/page.tsx` muestra una lista fija de variables (`VISIBLES`, que incluye `turbidez` y `tempExterna`) y del selector de tendencia (`GRAFICABLES`, con `turbidez`), y el aviso de etapa química menciona "turbidez hasta 40 °C". Con el equipo comprado esas tarjetas quedan siempre en "—".
+
+**Propuesta:**
+- **Qué tarjetas mostrar:** las de `ciclos/{id}.variablesVistas.{deviceId}` (ya lo escribe el backend). Solo crece durante el ciclo, así que una variable descartada en una lectura no desaparece de la pantalla; no requiere leer `dispositivos` (solo admin); y una sonda nueva aparece sola.
+- **Estado de cada tarjeta**, desde `ultimaLectura.{deviceId}` (`confianza` y `descartadas` ya se guardan): valor normal; **"≥ 2000"** si está saturada; **atenuada** con "fuera de operación"; o **"Sin dato: <motivo>"** si la última lectura la descartó.
+- **Alertas:** las de `tipo: "saturacion"` mostrarlas como "≥ {max}" en `PanelAlertas` / `HistorialAlertas` (hoy `formatearRango` las mostraría como "≤ {max}").
+- Quitar la mención fija a la turbidez del aviso de etapa química, o mostrarla solo si el equipo la mide.
+
