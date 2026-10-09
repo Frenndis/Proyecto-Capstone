@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { estadoIndicadores, formatear } from "./tipos";
+import { SIN_UMBRAL, estadoIndicadores, formatear, formatearRango } from "./tipos";
 
 // Marca de tiempo: en el front llega como Timestamp de Firestore, pero
 // estadoIndicadores solo comprueba que exista, así que cualquier valor sirve.
@@ -86,5 +86,27 @@ describe("formatear", () => {
   it("devuelve guión cuando no hay dato", () => {
     expect(formatear("volumenEstimado", undefined)).toBe("—");
     expect(formatear("volumenEstimado", null)).toBe("—");
+  });
+});
+
+describe("formatearRango", () => {
+  it("solo máximo", () => expect(formatearRango({ max: 3000 })).toBe("≤ 3000"));
+  it("solo mínimo", () => expect(formatearRango({ min: 5 })).toBe("≥ 5"));
+  it("ambos límites", () => expect(formatearRango({ min: 5, max: 11 })).toBe("5–11"));
+
+  it("ninguno", () => {
+    expect(formatearRango({})).toBe(SIN_UMBRAL);
+    expect(formatearRango(undefined)).toBe("Sin umbral definido");
+  });
+
+  // Las alertas guardan el límite ausente como null, no como undefined
+  it("trata null como límite ausente", () => {
+    expect(formatearRango({ min: null, max: 60 })).toBe("≤ 60");
+    expect(formatearRango({ min: null, max: null })).toBe(SIN_UMBRAL);
+  });
+
+  it("acepta 0 como límite válido", () => {
+    expect(formatearRango({ min: 0 })).toBe("≥ 0");
+    expect(formatearRango({ min: 0, max: 0 })).toBe("0–0");
   });
 });

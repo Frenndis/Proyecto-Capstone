@@ -1,7 +1,7 @@
 "use client";
 import { doc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-import { Alerta, ETAPA_LABEL, META, formatear } from "@/lib/tipos";
+import { Alerta, ETAPA_LABEL, META, formatear, formatearRango } from "@/lib/tipos";
 import { useAuth } from "@/lib/auth-context";
 
 export default function PanelAlertas({ alertas }: { alertas: Alerta[] }) {
@@ -37,7 +37,7 @@ export default function PanelAlertas({ alertas }: { alertas: Alerta[] }) {
               )}
             </p>
             <p className="text-xs text-slate-600 dark:text-slate-400">
-              {ETAPA_LABEL[a.etapa] ?? a.etapa} · límite {a.min ?? "—"}–{a.max ?? "—"} ·
+              {ETAPA_LABEL[a.etapa] ?? a.etapa} · límite {formatearRango(a)} ·
               {" desde "}
               {a.desde?.toDate ? a.desde.toDate().toLocaleTimeString("es-CL") : "—"}
               {a.hasta?.toDate && ` · última ${a.hasta.toDate().toLocaleTimeString("es-CL")}`}

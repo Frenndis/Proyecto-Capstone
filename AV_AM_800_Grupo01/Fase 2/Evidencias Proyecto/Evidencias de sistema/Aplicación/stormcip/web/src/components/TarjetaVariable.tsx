@@ -1,5 +1,5 @@
 "use client";
-import { META, Rango, esDerivado, formatear, fueraDeRango } from "@/lib/tipos";
+import { META, Rango, SIN_UMBRAL, esDerivado, formatear, formatearRango, fueraDeRango } from "@/lib/tipos";
 
 export default function TarjetaVariable({
   variable, valor, rango, confianza,
@@ -12,9 +12,10 @@ export default function TarjetaVariable({
   const alerta = !sinDato && fueraDeRango(valor, rango);
   const calculado = esDerivado(variable);
 
-  const objetivo = rango
-    ? `Objetivo ${rango.min ?? "—"}${rango.max !== undefined ? `–${rango.max}` : " o más"}`
-    : calculado ? "Valor calculado" : "Sin umbral definido";
+  const umbral = formatearRango(rango);
+  const objetivo = umbral !== SIN_UMBRAL
+    ? `Objetivo ${umbral}`
+    : calculado ? "Valor calculado" : SIN_UMBRAL;
 
   return (
     <div className={`rounded-xl border p-4 ${alerta

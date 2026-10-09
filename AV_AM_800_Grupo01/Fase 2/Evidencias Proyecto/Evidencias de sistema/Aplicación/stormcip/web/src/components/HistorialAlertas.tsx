@@ -1,5 +1,5 @@
 "use client";
-import { Alerta, ETAPA_LABEL, META, formatear } from "@/lib/tipos";
+import { Alerta, ETAPA_LABEL, META, formatear, formatearRango } from "@/lib/tipos";
 
 // Solo lectura: a diferencia de PanelAlertas, acá no se reconoce nada.
 // Muestra el cicloId porque, al no estar acotado a un ciclo, hace falta
@@ -27,7 +27,7 @@ export default function HistorialAlertas({ alertas }: { alertas: Alerta[] }) {
               )}
             </p>
             <p className="text-xs text-slate-600 dark:text-slate-400">
-              {a.cicloId} · {ETAPA_LABEL[a.etapa] ?? a.etapa} · límite {a.min ?? "—"}–{a.max ?? "—"} ·
+              {a.cicloId} · {ETAPA_LABEL[a.etapa] ?? a.etapa} · límite {formatearRango(a)} ·
               {" desde "}
               {a.desde?.toDate ? a.desde.toDate().toLocaleTimeString("es-CL") : "—"}
               {a.hasta?.toDate && ` · última ${a.hasta.toDate().toLocaleTimeString("es-CL")}`}

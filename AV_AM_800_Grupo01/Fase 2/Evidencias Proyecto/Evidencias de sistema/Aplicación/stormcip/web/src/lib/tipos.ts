@@ -96,6 +96,22 @@ export function fueraDeRango(valor: number, r?: Rango) {
   return (r.min !== undefined && valor < r.min) || (r.max !== undefined && valor > r.max);
 }
 
+export const SIN_UMBRAL = "Sin umbral definido";
+
+/**
+ * Texto de un umbral según los límites presentes: "≤ 3000", "≥ 5", "5–11".
+ * Acepta null porque las alertas guardan los límites ausentes como null.
+ * Un límite 0 es válido: se compara contra null/undefined, no por "falsy".
+ */
+export function formatearRango(r?: { min?: number | null; max?: number | null }) {
+  const min = r?.min ?? null;
+  const max = r?.max ?? null;
+  if (min !== null && max !== null) return `${min}–${max}`;
+  if (max !== null) return `≤ ${max}`;
+  if (min !== null) return `≥ ${min}`;
+  return SIN_UMBRAL;
+}
+
 export function formatear(variable: string, valor?: number | null) {
   if (valor === undefined || valor === null) return "—";
   const d = META[variable]?.decimales ?? 2;
