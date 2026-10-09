@@ -10,6 +10,23 @@ explícito. No confiar en el proyecto "activo" por defecto del CLI: en
 algunas máquinas puede haber quedado fijado un proyecto distinto (ver nota al
 final).
 
+**Regla para los scripts de `scripts/`: ningún script toca producción sin
+flags explícitos.** Sin flags usan los emuladores (o se niegan si no tienen un
+destino claro). Ninguno decide el destino por variables de entorno
+(`PROJECT_ID`, `INGEST_URL`), y todos se niegan si encuentran variables de
+emulador junto con los flags de producción.
+
+| Script | Producción solo con |
+|---|---|
+| `cerrar-ciclo.js`, `recalcular.js`, `rotar-key.js`, `simulador-prod.js` | `--prod --project stormcip-972bd` (guardarraíles compartidos en `scripts/entorno.js`; además se niegan si encuentran `PROJECT_ID=stormcip-972bd` sin `--prod`) |
+| `simulador-cip.js` | `--prod --project stormcip-972bd` |
+| `seed-prod.js`, `produccion-plantilla.js` | `--project stormcip-972bd --confirmar` (solo producción; 5 s para cancelar) |
+| `seed.js`, `simulador.js`, `simulador-ttn.js` | Nunca: solo emuladores |
+
+Las credenciales de los scripts con Admin SDK son las de
+`gcloud auth application-default login`. Igual que los comandos de este
+documento, cada ejecución contra producción requiere aprobación explícita.
+
 ## 0) Requisitos
 
 - Plan **Blaze** activo en `stormcip-972bd` (Cloud Functions v2 lo exige).

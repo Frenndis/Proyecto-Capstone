@@ -6,52 +6,18 @@
 //   node recalcular.js ID_DEL_CICLO    -> solo ese
 //   node recalcular.js [ID] --prod --project stormcip-972bd   -> producción
 //
-// Producción solo con ambos flags explícitos (mismos guardarraíles que
-// cerrar-ciclo.js y simulador-cip.js) y con credenciales de
-// `gcloud auth application-default login`. Antes el destino dependía de las
-// variables PROJECT_ID y FIRESTORE_EMULATOR_HOST.
-const { initializeApp, applicationDefault } = require("firebase-admin/app");
+// Producción solo con ambos flags explícitos y credenciales de
+// `gcloud auth application-default login` (guardarraíles en entorno.js).
 const { getFirestore } = require("firebase-admin/firestore");
-const { PROJECT_ID } = require("./config");
+const { PROYECTO_PROD, resolverEntorno, inicializarAdmin } = require("./entorno");
 
-const PROYECTO_PROD = "stormcip-972bd";
-
-const argv = process.argv.slice(2);
-const flag = (n) => argv.includes(`--${n}`);
-const arg = (n) => {
-  const i = argv.indexOf(`--${n}`);
-  return i > -1 && argv[i + 1] !== undefined && !argv[i + 1].startsWith("--") ? argv[i + 1] : undefined;
-};
-const salir = (msg) => { console.error(msg); process.exit(1); };
-
-const PROYECTO = arg("project");
-const PROD = flag("prod");
-
-// ── Entorno: emuladores por defecto, producción solo explícita ─
-let projectId;
-if (PROD) {
-  if (PROYECTO !== PROYECTO_PROD) salir(`Producción requiere --prod --project ${PROYECTO_PROD} explícitos.`);
-  if (process.env.FIRESTORE_EMULATOR_HOST) {
-    salir("FIRESTORE_EMULATOR_HOST está definido: no se mezcla producción con emuladores.");
-  }
-  projectId = PROYECTO_PROD;
-  initializeApp({ credential: applicationDefault(), projectId });
-} else {
-  if (PROYECTO) salir("--project solo se usa junto con --prod. Sin --prod se usan los emuladores.");
-  // Restos de la forma de uso anterior ($env:PROJECT_ID = "stormcip-972bd")
-  if (PROJECT_ID === PROYECTO_PROD) {
-    salir(`PROJECT_ID=${PROYECTO_PROD} en el entorno, pero sin --prod se usan los emuladores. ` +
-          `Para producción: --prod --project ${PROYECTO_PROD}; para emuladores, borra PROJECT_ID.`);
-  }
-  process.env.FIRESTORE_EMULATOR_HOST ??= "127.0.0.1:8080";
-  projectId = PROJECT_ID;
-  initializeApp({ projectId });
-}
-console.log(`Entorno: ${PROD ? "PRODUCCIÓN" : `emuladores (${process.env.FIRESTORE_EMULATOR_HOST})`} · proyecto ${projectId}`);
+const entorno = resolverEntorno();
+const PROD = entorno.prod;
+inicializarAdmin(entorno);
 const db = getFirestore();
 
 (async () => {
-  const soloUno = argv.find((a, i) => !a.startsWith("--") && argv[i - 1] !== "--project");
+  const soloUno = entorno.posicionales[0];
 
   const docs = soloUno
     ? [await db.doc(`ciclos/${soloUno}`).get()]

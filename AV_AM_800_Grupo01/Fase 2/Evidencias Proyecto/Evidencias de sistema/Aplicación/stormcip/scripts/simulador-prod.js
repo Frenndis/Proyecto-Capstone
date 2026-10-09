@@ -1,17 +1,18 @@
-// Simula un enjuague REAL contra producción, vía POST /api/ingest.
+// Simula un enjuague con lecturas FECHADAS hacia atrás, vía el endpoint HTTP
+// de ingesta (ingestLectura / POST /api/ingest).
 //
-// Por qué no sirve simulador.js aquí:
-//   - usa deviceId "wqs-lb-01" y las keys de desarrollo (dev-key-*), que en
-//     producción no existen: seed-prod.js se niega a sembrar una key así;
-//   - envía "temperatura", que es del modelo v1. En v2 esa variable no existe
-//     (ver VARIABLES en functions/src/types.ts) y el ingest la descarta. Sin
-//     una temperatura válida no hay conductividad25C, y sin conductividad25C
-//     NINGÚN indicador del ciclo se puede calcular.
-//
-// Uso (PowerShell, desde scripts\):
+// Destino (guardarraíles en entorno.js):
+//   node simulador-prod.js                                    -> emuladores
+//                                                                (wqs-lb-01, dev-key-wqs-456)
 //   $env:DEVICE_KEY = "<la misma que usaste en seed-prod.js>"
-//   node simulador-prod.js                 -> 15 lecturas, 2 min entre cada una
-//   node simulador-prod.js --pasos 20 --intervalo 3
+//   node simulador-prod.js --prod --project stormcip-972bd    -> producción (wqs-01)
+//   ... --pasos 20 --intervalo 3                              -> 20 lecturas, 3 min entre cada una
+//
+// Antes iba a producción por defecto (o a INGEST_URL): ya no hay URL
+// configurable, el destino lo deciden solo los flags.
+//
+// La etapa la pone el ciclo (su etapaActual), no este script: las lecturas se
+// guardan en la etapa en que esté el ciclo, que se muestra en cada respuesta.
 //
 // Las lecturas se FECHAN hacia atrás (campo ts, que el ingest acepta en millis)
 // para que queden separadas por minutos de proceso aunque el script tarde
@@ -19,41 +20,40 @@
 // de miles de µS/cm por minuto y un tiempoHastaLimpio de 14 s: números que no
 // se pueden defender en una demo.
 
-const DEVICE_KEY = process.env.DEVICE_KEY;
-if (!DEVICE_KEY) {
-  console.error("Falta DEVICE_KEY. Es la misma que generaste para seed-prod.js.");
-  process.exit(1);
-}
-if (DEVICE_KEY.startsWith("dev-key")) {
-  console.error("Esa es una key de desarrollo; producción no la acepta.");
-  process.exit(1);
+const { PROYECTO_PROD, resolverEntorno, anunciar, salir } = require("./entorno");
+
+const entorno = resolverEntorno({ flagsConValor: ["pasos", "intervalo"] });
+const URL = entorno.prod
+  ? `https://${PROYECTO_PROD}.web.app/api/ingest`
+  : `http://127.0.0.1:5001/${entorno.projectId}/southamerica-west1/ingestLectura`;
+
+const DEVICE_KEY = process.env.DEVICE_KEY || (entorno.prod ? undefined : "dev-key-wqs-456");
+if (!DEVICE_KEY) salir("Falta DEVICE_KEY. Es la misma que generaste para seed-prod.js.");
+if (entorno.prod && DEVICE_KEY.startsWith("dev-key")) {
+  salir("Esa es una key de desarrollo; producción no la acepta.");
 }
 
-const URL = process.env.INGEST_URL || "https://stormcip-972bd.web.app/api/ingest";
-// wqs-01 es el dispositivo que crea seed-prod.js, con las 4 sondas activas:
-// DR-PH01 (ph, tempSonda), DR-ECK10.0 (conductividad, tempEc), DR-TS1
-// (turbidez) y DS18B20 (tempExterna). El ingest descarta cualquier variable
-// que no tenga una sonda activa que la cubra, así que estos nombres importan.
-const DEVICE_ID = process.env.DEVICE_ID || "wqs-01";
+// Dispositivos de seed-prod.js (wqs-01) y seed.js (wqs-lb-01), ambos con el
+// equipo comprado: DR-PH01 (ph, tempSonda) y DR-ECK1.0 (conductividad, tempEc).
+const DEVICE_ID = process.env.DEVICE_ID || (entorno.prod ? "wqs-01" : "wqs-lb-01");
 const CICLO_ID = process.env.CICLO_ID || "CIP-2026-0001";
-const ETAPA = process.env.ETAPA || "enjuague";
 
-const arg = (nombre, porDefecto) => {
-  const i = process.argv.indexOf(`--${nombre}`);
-  return i > -1 ? Number(process.argv[i + 1]) : porDefecto;
+const numero = (nombre, porDefecto) => {
+  const v = entorno.valor(nombre);
+  return v === undefined ? porDefecto : Number(v);
 };
-const PASOS = arg("pasos", 15);
-const INTERVALO_MIN = arg("intervalo", 2);
+const PASOS = numero("pasos", 15);
+const INTERVALO_MIN = numero("intervalo", 2);
 
 const ruido = (amp) => (Math.random() - 0.5) * amp;
 
 // Curva de enjuague: la conductividad cae exponencialmente desde el arrastre
 // de la etapa química hacia la del agua de red (150 µS/cm, según
-// configuracion/calculos). El criterio de limpio es 300 µS/cm a 25 °C y 20 NTU;
+// configuracion/calculos). El criterio de limpio es 200 µS/cm a 25 °C;
 // TAU está elegido para que la curva lo cruce alrededor de dos tercios del
 // recorrido, dejando lecturas despues del cruce para que la pendiente quede
-// bien definida.
-const EC_INICIAL = 2400;
+// bien definida. EC_INICIAL queda bajo el tope de la DR-ECK1.0 (2000).
+const EC_INICIAL = 1800;
 const EC_AGUA_RED = 150;
 const TAU = PASOS / 4;
 
@@ -71,16 +71,15 @@ function lectura(paso) {
     valores: {
       conductividad: +(EC_AGUA_RED + (EC_INICIAL - EC_AGUA_RED) * d + ruido(20)).toFixed(1),
       tempEc: +tempEc.toFixed(1),
-      tempExterna: +(tempEc - 2 + ruido(0.4)).toFixed(1),
       ph: +(11.5 - 4 * (1 - d) + ruido(0.2)).toFixed(2),
-      turbidez: +(70 * d + 4 + ruido(2)).toFixed(1),
+      tempSonda: +(tempEc - 0.3 + ruido(0.4)).toFixed(1),
     },
   };
 }
 
 (async () => {
-  console.log(`Enviando ${PASOS} lecturas a ${URL}`);
-  console.log(`dispositivo=${DEVICE_ID}  ciclo=${CICLO_ID}  etapa=${ETAPA}`);
+  anunciar(entorno, URL);
+  console.log(`Enviando ${PASOS} lecturas · dispositivo=${DEVICE_ID}  ciclo=${CICLO_ID}`);
   console.log(`separadas ${INTERVALO_MIN} min entre si (${PASOS * INTERVALO_MIN} min de proceso)\n`);
 
   let ok = 0;
@@ -90,7 +89,7 @@ function lectura(paso) {
       const res = await fetch(URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": DEVICE_KEY },
-        body: JSON.stringify({ deviceId: DEVICE_ID, cicloId: CICLO_ID, etapa: ETAPA, ts, valores }),
+        body: JSON.stringify({ deviceId: DEVICE_ID, cicloId: CICLO_ID, ts, valores }),
       });
       const cuerpo = await res.text();
 
@@ -99,7 +98,7 @@ function lectura(paso) {
         process.exit(1);
       }
       if (res.status === 404) {
-        console.error("\n404: revisa que INGEST_URL apunte al proyecto correcto.");
+        console.error(`\n404: ${URL} no respondió (¿emuladores apagados, o el ciclo ${CICLO_ID} no existe?).`);
         process.exit(1);
       }
       // procesarLectura responde 201 Created, no 200: comparar con 200 exacto
@@ -108,7 +107,7 @@ function lectura(paso) {
       if (aceptada) ok++;
       const marca = aceptada ? "ok   " : "FALLA";
       const hora = new Date(ts).toLocaleTimeString("es-CL");
-      console.log(`${marca} ${paso + 1}/${PASOS}  ${hora}  EC=${valores.conductividad} µS/cm  T=${valores.tempEc} °C  turb=${valores.turbidez}  ${res.status} ${cuerpo}`);
+      console.log(`${marca} ${paso + 1}/${PASOS}  ${hora}  EC=${valores.conductividad} µS/cm  T=${valores.tempEc} °C  ${res.status} ${cuerpo}`);
     } catch (e) {
       console.error(`Error de red en el paso ${paso + 1}:`, e.message);
     }
@@ -121,5 +120,5 @@ function lectura(paso) {
   }
   console.log("\nEl ciclo sigue en_curso, asi que el dashboard ya muestra las");
   console.log("tarjetas y la tendencia. Los INDICADORES aparecen al cerrarlo:");
-  console.log(`  node cerrar-ciclo.js ${CICLO_ID} --prod --project stormcip-972bd`);
+  console.log(`  node cerrar-ciclo.js ${CICLO_ID}${entorno.prod ? ` --prod --project ${PROYECTO_PROD}` : ""}`);
 })();

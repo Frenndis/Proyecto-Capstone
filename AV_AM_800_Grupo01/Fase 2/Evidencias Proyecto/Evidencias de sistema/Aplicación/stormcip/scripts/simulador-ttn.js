@@ -2,9 +2,14 @@
 // El body y `frm_payload` (base64) siguen el formato real de TTN: ttnUplink ya no
 // usa `decoded_payload`, decodifica los bytes crudos con wqsDecoder (ver
 // Base de datos/TAREAS-DECODER-WQS.md).
+// Solo emuladores: un TTN_URL que no sea local se rechaza (ver DESPLIEGUE.md).
 const { PROJECT_ID } = require("./config");
 const URL = process.env.TTN_URL ||
   `http://127.0.0.1:5001/${PROJECT_ID}/southamerica-west1/ttnUplink`;
+if (!/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(URL)) {
+  console.error(`simulador-ttn.js es solo para emuladores y TTN_URL apunta a ${URL}.`);
+  process.exit(1);
+}
 const SECRET = process.env.TTN_WEBHOOK_SECRET || "test-secret";
 
 // FPort=2, firmware 1.2, sondas del equipo comprado DR-PH01 + DR-ECK1.0 (ver

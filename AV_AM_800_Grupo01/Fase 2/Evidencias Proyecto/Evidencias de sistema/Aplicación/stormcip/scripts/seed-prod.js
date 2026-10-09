@@ -3,13 +3,29 @@
 // ellas, para que `dev-key-123` nunca llegue a una base pública.
 //
 // Uso (PowerShell, desde scripts\):
-//   $env:PROJECT_ID  = "stormcip-972bd"
 //   $env:ADMIN_EMAIL = "admin@tudominio.cl"
 //   $env:ADMIN_PASS  = "<la que generaste>"
 //   $env:DEVICE_KEY  = "<la que generaste>"
-//   node seed-prod.js
+//   node seed-prod.js --project stormcip-972bd --confirmar
+//
+// Guardarraíles (como produccion-plantilla.js): el proyecto va SOLO como flag
+// explícito, se exige --confirmar y hay 5 s para cancelar. Antes el destino
+// salía de la variable PROJECT_ID, que podía quedar definida de otra tarea.
 const admin = require("firebase-admin");
 const crypto = require("crypto");
+const { PROYECTO_PROD } = require("./entorno");
+
+const args = process.argv.slice(2);
+const iProyecto = args.indexOf("--project");
+const PROJECT_ID = iProyecto > -1 ? args[iProyecto + 1] : undefined;
+if (PROJECT_ID !== PROYECTO_PROD) {
+  console.error(`Falta --project ${PROYECTO_PROD}. Este script no tiene un proyecto por defecto (a propósito).`);
+  process.exit(1);
+}
+if (!args.includes("--confirmar")) {
+  console.error("Falta --confirmar. Revisa los datos del script antes de agregar esta bandera.");
+  process.exit(1);
+}
 
 // Guardarraíl: si quedó apuntando a los emuladores, no es producción.
 if (process.env.FIRESTORE_EMULATOR_HOST || process.env.FIREBASE_AUTH_EMULATOR_HOST) {
@@ -17,8 +33,8 @@ if (process.env.FIRESTORE_EMULATOR_HOST || process.env.FIREBASE_AUTH_EMULATOR_HO
   process.exit(1);
 }
 
-const { PROJECT_ID, ADMIN_EMAIL, ADMIN_PASS, DEVICE_KEY } = process.env;
-const faltan = Object.entries({ PROJECT_ID, ADMIN_EMAIL, ADMIN_PASS, DEVICE_KEY })
+const { ADMIN_EMAIL, ADMIN_PASS, DEVICE_KEY } = process.env;
+const faltan = Object.entries({ ADMIN_EMAIL, ADMIN_PASS, DEVICE_KEY })
   .filter(([, v]) => !v).map(([k]) => k);
 if (faltan.length) {
   console.error("Faltan variables de entorno:", faltan.join(", "));
@@ -37,6 +53,10 @@ admin.initializeApp({ projectId: PROJECT_ID });
 const db = admin.firestore();
 
 (async () => {
+  console.log(`Esto va a escribir en el proyecto: ${PROJECT_ID}`);
+  console.log("Ctrl+C ahora si no es el proyecto correcto. Continuando en 5 segundos...");
+  await new Promise((r) => setTimeout(r, 5000));
+
   await db.doc("plantas/demo").set({ nombre: "Planta Demo", cliente: "Cliente Demo" });
   await db.doc("plantas/demo/lineas/cip-01").set({
     nombre: "CIP-01", anden: 1, estado: "activa", caudalNominalM3h: 18,
