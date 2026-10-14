@@ -23,7 +23,8 @@ service cloud.firestore {
     match /ciclos/{cicloId} {
       allow read: if canRead();
       allow create, update: if isOper();
-      allow delete: if isAdmin();
+      // Sin delete: un ciclo cerrado o cancelado queda como 'finalizado' o 'abortado'.
+      // Borrar el documento dejaría huérfanas sus lecturas (Firestore no borra en cascada).
       // Lecturas solo las escribe el backend (ingestLectura)
       match /lecturas/{lecturaId} {
         allow read: if canRead();
@@ -51,6 +52,27 @@ service cloud.firestore {
     }
     // Estado de planta en vivo (PLC / simulador-cip): solo lo escribe el backend
     match /estadoProceso/{lineaId} {
+      allow read: if canRead();
+      allow write: if false;
+    }
+    // Control de la demo (botón "Iniciar simulación" del dashboard). Solo un admin
+    // escribe una orden: iniciar con un escenario, o detener. El simulador (Admin SDK)
+    // la lee, valida y la ejecuta; las reglas solo fijan la forma de la orden.
+    match /simulacionControl/{lineaId} {
+      allow read: if canRead();
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['comando', 'escenario', 'solicitudId', 'solicitadoPor', 'solicitadoEn'])
+        && request.resource.data.keys().hasAll(['comando', 'solicitudId', 'solicitadoPor', 'solicitadoEn'])
+        && request.resource.data.comando in ['iniciar', 'detener']
+        && (request.resource.data.comando == 'detener' || request.resource.data.escenario in ['normal', 'falla'])
+        && request.resource.data.solicitudId is string
+        && request.resource.data.solicitudId.size() >= 8 && request.resource.data.solicitudId.size() <= 64
+        && request.resource.data.solicitadoPor == request.auth.uid
+        && request.resource.data.solicitadoEn == request.time;
+      allow delete: if false;
+    }
+    // Latido y estado del simulador: solo lo escribe el simulador (Admin SDK)
+    match /simulacionEstado/{lineaId} {
       allow read: if canRead();
       allow write: if false;
     }

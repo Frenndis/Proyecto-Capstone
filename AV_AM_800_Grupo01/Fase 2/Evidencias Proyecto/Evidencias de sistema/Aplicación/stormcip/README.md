@@ -83,6 +83,7 @@ Cosas que ya costaron tiempo. Léelas antes de levantar los emuladores.
 - **Si las funciones no cargan** ("Failed to load function definition ... Timeout after 10000"), levanta con `FUNCTIONS_DISCOVERY_TIMEOUT=60`. En `cmd.exe`: `set FUNCTIONS_DISCOVERY_TIMEOUT=60` y luego `firebase emulators:start --project stormcip-dev`. Sin eso, `sim:ttn` responde 404 "Function ... does not exist".
 - **Corre `npm run build` en `functions/` después de cada cambio** en `functions/src/`: el emulador usa `lib/`, no recompila el TypeScript.
 - **No uses `npm run serve`** en `functions/`: solo levanta Functions (ver sección 2).
+- **Tests de `firestore.rules`:** `npm run test:reglas` en `functions/`, con el emulador de Firestore corriendo (127.0.0.1:8080). Usan un proyecto `demo-` propio y no tocan los datos de `stormcip-dev`. `npm test` no los incluye para no depender del emulador.
 
 **Simuladores**
 - **`sim:cip` pide `TTN_WEBHOOK_SECRET=test-secret`** (en `cmd.exe`: `set TTN_WEBHOOK_SECRET=test-secret`). Sin la variable termina con "Falta la variable de entorno TTN_WEBHOOK_SECRET".

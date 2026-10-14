@@ -2,16 +2,24 @@
   "name": "stormcip-functions",
   "private": true,
   "main": "lib/index.js",
-  "engines": { "node": "22" },
+  "engines": {
+    "node": "22"
+  },
   "scripts": {
     "build": "tsc",
     "build:watch": "tsc --watch --preserveWatchOutput",
     "serve": "npm run build && firebase emulators:start",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:reglas": "vitest run --config vitest.reglas.config.ts"
   },
   "dependencies": {
     "firebase-admin": "^12.7.0",
     "firebase-functions": "^6.1.0"
   },
-  "devDependencies": { "typescript": "^5.5.0", "vitest": "^2.1.0" }
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "firebase": "^12.19.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.1.0"
+  }
 }
