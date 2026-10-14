@@ -54,7 +54,6 @@ export default function BarraEtapas({
                     ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300"
                     : "border-slate-200 text-slate-500 dark:border-slate-700"}`}>
               {estado === "hecha" && "✓ "}{ETAPA_LABEL[etapa] ?? etapa}
-              {!monitoreada && <span className="ml-1.5 text-[10px] font-normal opacity-80">no monitoreada</span>}
             </span>
             {i < etapas.length - 1 && <span aria-hidden className="text-slate-300">›</span>}
           </li>
