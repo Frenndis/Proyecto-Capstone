@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FACTOR_HUECO, construirSerie, mediana } from "./serieTendencia";
+import { FACTOR_HUECO, construirSerie, franjasPorEtapa, mediana } from "./serieTendencia";
 
 const T0 = Date.parse("2026-10-14T12:00:00Z");
 const marca = (offsetS: number) => ({ toDate: () => new Date(T0 + offsetS * 1000) });
@@ -96,5 +96,95 @@ describe("construirSerie", () => {
       expect(s.huecos).toBe(1);
       expect(construirSerie([m(0), m(1), m(2), m(3), m(4)], "ph").huecos).toBe(0);
     });
+  });
+});
+
+const conEtapa = (offsetS: number, etapa: string, valores: Record<string, number | null> = { conductividad: 300 },
+  confianza?: Record<string, "medido" | "saturado" | "fuera_de_operacion">) =>
+  ({ ...lec(offsetS, valores), etapa, confianza });
+
+describe("construirSerie: confianza y filtro por etapa", () => {
+  it("cada punto conserva la confianza de la variable graficada", () => {
+    const { puntos } = construirSerie([
+      conEtapa(5, "alcalino", { conductividad: 2000 }, { conductividad: "saturado" }),
+      conEtapa(15, "alcalino", { conductividad: 900 }, { conductividad: "fuera_de_operacion" }),
+      conEtapa(25, "enjuague", { conductividad: 300 }, { conductividad: "medido" }),
+      conEtapa(35, "enjuague", { conductividad: 280 }),
+    ], "conductividad");
+    expect(puntos.map((p) => p.confianza)).toEqual(["saturado", "fuera_de_operacion", "medido", undefined]);
+  });
+
+  it("soloEtapas deja fuera las demás (y las lecturas sin etapa)", () => {
+    const lecturas = [
+      conEtapa(5, "preenjuague"), conEtapa(15, "alcalino"), conEtapa(25, "enjuague"), lec(35, { conductividad: 1 }),
+    ];
+    const { puntos } = construirSerie(lecturas, "conductividad", { soloEtapas: ["preenjuague", "enjuague"] });
+    expect(puntos.map((p) => p.t)).toEqual([T0 + 5000, T0 + 25000]);
+  });
+
+  it("al filtrar, una etapa omitida larga corta la línea", () => {
+    const m = (s: number, e: string) => conEtapa(s, e);
+    const lecturas = [
+      m(5, "preenjuague"), m(15, "preenjuague"), m(25, "preenjuague"), m(35, "preenjuague"),
+      m(45, "alcalino"), m(55, "alcalino"), m(65, "alcalino"), m(75, "alcalino"), m(85, "alcalino"), m(95, "alcalino"),
+      m(105, "enjuague"), m(115, "enjuague"),
+    ];
+    const s = construirSerie(lecturas, "conductividad", { soloEtapas: ["preenjuague", "enjuague"] });
+    expect(s.huecos).toBe(1);
+    expect(s.puntos.filter((p) => p.valor !== null)).toHaveLength(6);
+  });
+});
+
+describe("franjasPorEtapa", () => {
+  const lecturas = [
+    conEtapa(5, "preenjuague"), conEtapa(15, "preenjuague"),
+    conEtapa(45, "alcalino"), conEtapa(55, "alcalino"),
+    conEtapa(85, "enjuague"),
+  ];
+  const opciones = { inicioMs: T0, finMs: T0 + 100_000 };
+
+  it("la primera franja arranca en el inicio y la última llega al fin", () => {
+    const f = franjasPorEtapa(lecturas, opciones);
+    expect(f.map((x) => x.etapa)).toEqual(["preenjuague", "alcalino", "enjuague"]);
+    expect(f[0].desdeMs).toBe(T0);
+    expect(f[2].hastaMs).toBe(T0 + 100_000);
+  });
+
+  it("el límite entre etapas es el punto medio entre la última lectura de una y la primera de la siguiente", () => {
+    const f = franjasPorEtapa(lecturas, opciones);
+    expect(f[0].hastaMs).toBe(T0 + 30_000);   // entre 15 s y 45 s
+    expect(f[1].desdeMs).toBe(T0 + 30_000);
+    expect(f[1].hastaMs).toBe(T0 + 70_000);   // entre 55 s y 85 s
+    expect(f[2].desdeMs).toBe(T0 + 70_000);
+  });
+
+  it("las franjas son contiguas, sin superponerse", () => {
+    const f = franjasPorEtapa(lecturas, opciones);
+    for (let i = 1; i < f.length; i++) expect(f[i].desdeMs).toBe(f[i - 1].hastaMs);
+  });
+
+  it("si la etapa actual ya cambió, la última franja no se estira hasta ahora", () => {
+    const f = franjasPorEtapa(lecturas, { ...opciones, etapaActual: "acido" });
+    expect(f[2].hastaMs).toBeLessThan(T0 + 100_000);
+    expect(f[2].hastaMs).toBeGreaterThanOrEqual(T0 + 85_000);
+  });
+
+  it("si la etapa actual es la de la última lectura, llega hasta ahora", () => {
+    expect(franjasPorEtapa(lecturas, { ...opciones, etapaActual: "enjuague" })[2].hastaMs).toBe(T0 + 100_000);
+  });
+
+  it("una etapa que reaparece genera otra franja", () => {
+    const f = franjasPorEtapa([conEtapa(5, "a"), conEtapa(15, "b"), conEtapa(25, "a")], opciones);
+    expect(f.map((x) => x.etapa)).toEqual(["a", "b", "a"]);
+  });
+
+  it("usa todas las lecturas aunque no tengan valor en la variable", () => {
+    const f = franjasPorEtapa([conEtapa(5, "preenjuague", { ph: null }), conEtapa(45, "alcalino", { ph: null })], opciones);
+    expect(f).toHaveLength(2);
+  });
+
+  it("sin lecturas o sin etapa: no hay franjas", () => {
+    expect(franjasPorEtapa([], opciones)).toEqual([]);
+    expect(franjasPorEtapa([lec(5, { ph: 7 })], opciones)).toEqual([]);
   });
 });
