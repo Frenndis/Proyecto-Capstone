@@ -144,7 +144,7 @@ function Dashboard() {
           </div>
           {graficoActual
             ? <GraficoTendencia lecturas={lecturas} variable={graficoActual} rango={rangos[graficoActual]}
-                inicioMs={inicioMs} finMs={finMs} />
+                inicioMs={inicioMs} finMs={finMs} etapaActual={etapa} />
             : <p className="text-sm text-slate-500">Sin variables graficables todavía.</p>}
           <p className="mt-2 text-xs text-slate-500">
             {lecturas.length} lectura{lecturas.length === 1 ? "" : "s"} del ciclo, desde su inicio.
