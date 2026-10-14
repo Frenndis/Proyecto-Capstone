@@ -6,7 +6,9 @@ import {
   collection, doc, limit, onSnapshot, orderBy, query, where,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Alerta, Ciclo, Lectura, UltimaLecturaDispositivo, Umbrales } from "@/lib/tipos";
+import {
+  Alerta, Ciclo, Lectura, SondaDispositivo, UltimaLecturaDispositivo, Umbrales,
+} from "@/lib/tipos";
 
 export function useCicloActivo() {
   const [ciclo, setCiclo] = useState<Ciclo | null>(null);
@@ -134,4 +136,28 @@ export function ultimaLecturaReciente(
     ms(b[1]?.ts) > ms(a[1]?.ts) ? b : a
   );
   return { deviceId, lectura };
+}
+
+/**
+ * Sondas configuradas en dispositivos/{id}. Solo un admin puede leer ese
+ * documento (firestore.rules): sin permiso o sin documento, `sondas` queda
+ * undefined y el dashboard muestra todo lo visto, como hace el backend.
+ * `cargando` evita un parpadeo con tarjetas de sondas que el equipo ya no tiene.
+ */
+export function useSondasDispositivo(deviceId?: string) {
+  const [sondas, setSondas] = useState<Record<string, SondaDispositivo> | undefined>();
+  const [cargando, setCargando] = useState(Boolean(deviceId));
+  useEffect(() => {
+    if (!deviceId) { setSondas(undefined); setCargando(false); return; }
+    setCargando(true);
+    return onSnapshot(doc(db, "dispositivos", deviceId), (s) => {
+      setSondas(s.data()?.sondas as Record<string, SondaDispositivo> | undefined);
+      setCargando(false);
+    }, (e) => {
+      console.error("No se pudieron leer las sondas del dispositivo:", e);
+      setSondas(undefined);
+      setCargando(false);
+    });
+  }, [deviceId]);
+  return { sondas, cargando };
 }

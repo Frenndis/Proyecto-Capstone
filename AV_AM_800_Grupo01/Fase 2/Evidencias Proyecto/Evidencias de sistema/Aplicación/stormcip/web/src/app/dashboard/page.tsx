@@ -3,22 +3,21 @@ import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import GuardRol from "@/components/layout/GuardRol";
 import {
-  useAlertas, useCicloMostrado, useHistorialAlertas, useLecturas, useUmbrales,
-  ultimaLecturaReciente,
+  useAlertas, useCicloMostrado, useHistorialAlertas, useLecturas, useSondasDispositivo,
+  useUmbrales, ultimaLecturaReciente,
 } from "@/hooks/useDatosCip";
-import TarjetaVariable from "@/components/TarjetaVariable";
+import TarjetaSonda from "@/components/TarjetaSonda";
 import GraficoTendencia from "@/components/GraficoTendencia";
 import PanelAlertas from "@/components/PanelAlertas";
 import HistorialAlertas from "@/components/HistorialAlertas";
 import IndicadoresCiclo from "@/components/IndicadoresCiclo";
 import { ETAPAS_MONITOREADAS, ETAPA_LABEL, META } from "@/lib/tipos";
+import { estadoTarjeta, variablesAMostrar } from "@/lib/tarjetas";
 
-// Alcance del MVP: las sondas WQS solo operan dentro de rango en los enjuagues.
-// conductividad25C va primero porque es el indicador real de "agua limpia":
-// sin compensar por temperatura, dos lecturas no son comparables entre sí.
-const VISIBLES = [
-  "conductividad25C", "conductividad", "turbidez", "ph", "tempEc", "tempExterna",
-];
+// Las tarjetas salen de variablesVistas y de las sondas del equipo (ver
+// variablesAMostrar), no de una lista fija. conductividad25C va primero porque
+// es el indicador real de "agua limpia": sin compensar por temperatura, dos
+// lecturas no son comparables entre sí.
 const GRAFICABLES = ["conductividad25C", "conductividad", "turbidez", "ph", "tempEc"];
 
 // Por ahora solo admin. Cuando se definan los permisos de operador, se agrega
@@ -39,15 +38,21 @@ function Dashboard() {
   const historialAlertas = useHistorialAlertas();
   const umbrales = useUmbrales();
   const [grafico, setGrafico] = useState("conductividad25C");
+  const reciente = ultimaLecturaReciente(ciclo?.ultimaLectura);
+  // Sin lectura aún, el equipo es el primero que reportó variables en el ciclo
+  const deviceId = reciente.deviceId ?? Object.keys(ciclo?.variablesVistas ?? {})[0];
+  const { sondas, cargando: cargandoSondas } = useSondasDispositivo(deviceId);
 
   // GuardRol ya garantiza sesión y rol antes de montar este componente.
   if (!user) return null;
 
   const etapa = ciclo?.etapaActual ?? "";
   const rangos = umbrales[etapa] ?? {};
-  const { deviceId, lectura } = ultimaLecturaReciente(ciclo?.ultimaLectura);
-  const valores = lectura?.valores ?? {};
-  const derivados = lectura?.derivados ?? {};
+  const lectura = reciente.lectura;
+  const variables = variablesAMostrar(deviceId ? ciclo?.variablesVistas?.[deviceId] : undefined, sondas);
+  const graficables = GRAFICABLES.filter((v) => variables.includes(v));
+  // La variable elegida puede dejar de existir si cambia el equipo o el ciclo
+  const graficoActual = graficables.includes(grafico) ? grafico : graficables[0];
   const etapaFueraDeAlcance = enVivo && etapa !== "" && !ETAPAS_MONITOREADAS.includes(etapa);
 
   return (
@@ -99,28 +104,32 @@ function Dashboard() {
           <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm
                         text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
             Etapa fuera del alcance de monitoreo: las sondas WQS operan hasta 60 °C
-            (turbidez hasta 40 °C). Los valores mostrados no son confiables en esta etapa.
+            {variables.includes("turbidez") && " (turbidez hasta 40 °C)"}. Los valores
+            mostrados no son confiables en esta etapa.
           </p>
         )}
 
         <section className="grid grid-cols-2 gap-3 md:grid-cols-3">
-          {VISIBLES.map((v) => (
-            <TarjetaVariable key={v} variable={v}
-              valor={valores[v] ?? derivados[v]}
-              rango={rangos[v]}
-              confianza={lectura && (lectura as any).confianza?.[v]} />
-          ))}
+          {cargandoSondas ? <p className="col-span-full text-sm text-slate-500">Leyendo equipo…</p>
+           : variables.length === 0 ? <p className="col-span-full rounded-lg border border-dashed p-4 text-sm text-slate-500">
+                El equipo aún no reporta variables en este ciclo.</p>
+           : variables.map((v) => (
+              <TarjetaSonda key={v} variable={v} rango={rangos[v]}
+                estado={estadoTarjeta(v, lectura, sondas)} />
+            ))}
         </section>
 
         <section className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-medium">Tendencia</h2>
-            <select value={grafico} onChange={(e) => setGrafico(e.target.value)}
+            <select value={graficoActual ?? ""} onChange={(e) => setGrafico(e.target.value)}
               className="rounded-md border px-2 py-1 text-sm dark:bg-slate-900">
-              {GRAFICABLES.map((v) => <option key={v} value={v}>{META[v].label}</option>)}
+              {graficables.map((v) => <option key={v} value={v}>{META[v].label}</option>)}
             </select>
           </div>
-          <GraficoTendencia lecturas={lecturas} variable={grafico} rango={rangos[grafico]} />
+          {graficoActual
+            ? <GraficoTendencia lecturas={lecturas} variable={graficoActual} rango={rangos[graficoActual]} />
+            : <p className="text-sm text-slate-500">Sin variables graficables todavía.</p>}
           <p className="mt-2 text-xs text-slate-500">
             Últimas {lecturas.length} lecturas del ciclo.
           </p>
