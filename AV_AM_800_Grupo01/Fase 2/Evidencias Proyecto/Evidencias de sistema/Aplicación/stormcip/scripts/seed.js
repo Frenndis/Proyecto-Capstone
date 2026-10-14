@@ -12,6 +12,9 @@ const db = admin.firestore();
     nombre: "Planta Frutillar", cliente: "Soprole", proveedor: "Austral Chemicals Chile S.A.",
   });
   await db.doc("plantas/frutillar/lineas/cip-01").set({ nombre: "CIP-01", anden: 2, estado: "activa" });
+  // Línea de la demo (botón "Iniciar simulación"): sim:cip --esperar corre aquí, así
+  // sus ciclos y lecturas nunca se mezclan con los del equipo real de cip-01.
+  await db.doc("plantas/frutillar/lineas/cip-sim").set({ nombre: "CIP-SIM (demo)", anden: 0, estado: "activa", simulada: true });
 
   // En v2 un dispositivo SIN sondas activas no puede ingestar nada: specDe()
   // no encuentra spec para ninguna variable y procesarLectura responde 400
@@ -38,6 +41,19 @@ const db = admin.firestore();
   await db.doc("dispositivos/wqs-lb-01").set({
     plantaId: "frutillar", lineaId: "cip-01", tipo: "wqs-lb", activo: true,
     apiKeyHash: crypto.createHash("sha256").update("dev-key-wqs-456").digest("hex"),
+    firmware: "1.2",
+    sondas: {
+      s1: { sondaId: "s1", modelo: "DR-PH01",   activa: true },
+      s2: { sondaId: "s2", modelo: "DR-ECK1.0", activa: true },
+    },
+  });
+
+  // Dispositivo simulado de la demo: mismas sondas y firmware que el equipo comprado,
+  // pero en la línea cip-sim. Es el que usa sim:cip --esperar (ver simulador-cip.js).
+  await db.doc("dispositivos/wqs-sim-01").set({
+    plantaId: "frutillar", lineaId: "cip-sim", tipo: "wqs-lb", activo: true,
+    devEui: "5349434950000001",
+    apiKeyHash: crypto.createHash("sha256").update("dev-key-wqs-sim-789").digest("hex"),
     firmware: "1.2",
     sondas: {
       s1: { sondaId: "s1", modelo: "DR-PH01",   activa: true },
