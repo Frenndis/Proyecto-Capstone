@@ -1,7 +1,7 @@
 "use client";
 import { ETAPA_LABEL, EstadoProceso } from "@/lib/tipos";
 import {
-  estadoEtapas, formatearDuracion, procesoDelCiclo, segundosDelCiclo, segundosEnEtapa,
+  estadoEtapas, formatearDuracion, segundosDelCiclo, segundosEnEtapa,
   segundosRestantesCiclo, segundosRestantesEtapa,
 } from "@/lib/etapas";
 
@@ -9,22 +9,20 @@ type CicloBarra = {
   id: string; etapaActual?: string; estado?: string; inicio?: any; fin?: any;
 };
 
-function Tiempo({ etiqueta, segundos, marca }: { etiqueta: string; segundos: number | null; marca?: string }) {
+function Tiempo({ etiqueta, segundos }: { etiqueta: string; segundos: number | null }) {
   return (
     <span><b>{etiqueta}:</b>{" "}
       {segundos === null
         ? <span className="text-slate-500">sin dato</span>
-        : <span className="tabular-nums">{formatearDuracion(segundos)}
-            {marca && <span className="ml-1 text-[10px] font-semibold uppercase text-amber-700 dark:text-amber-300">{marca}</span>}
-          </span>}
+        : <span className="tabular-nums">{formatearDuracion(segundos)}</span>}
     </span>
   );
 }
 
 // Etapas del ciclo con el cronómetro. El tiempo transcurrido del ciclo sale de su
 // inicio; el tiempo en la etapa y el restante, solo de estadoProceso (el ciclo no
-// guarda cuándo empezó ni cuánto dura cada etapa), y se marcan SIMULADO mientras
-// ese documento lo sea. Sin estado de planta vigente: "sin dato".
+// guarda cuándo empezó ni cuánto dura cada etapa). Sin estado de planta vigente:
+// "sin dato".
 export default function BarraEtapas({
   ciclo, proceso, detenido, ahora,
 }: {
@@ -35,8 +33,6 @@ export default function BarraEtapas({
   const enEtapa = segundosEnEtapa(ciclo, proceso, detenido, ahora);
   const restanteEtapa = segundosRestantesEtapa(ciclo, proceso, detenido, ahora);
   const restanteCiclo = segundosRestantesCiclo(ciclo, proceso, detenido, ahora);
-  const simulado = procesoDelCiclo(proceso, ciclo.id)?.simulado === true;
-  const marca = simulado ? "simulado" : undefined;
   const enCurso = ciclo.estado === "en_curso";
 
   return (
@@ -64,9 +60,9 @@ export default function BarraEtapas({
         <Tiempo etiqueta={enCurso ? "Tiempo del ciclo" : "Duración del ciclo"} segundos={delCiclo} />
         {enCurso && (
           <>
-            <Tiempo etiqueta="En esta etapa" segundos={enEtapa} marca={marca} />
-            <Tiempo etiqueta="Restante de la etapa" segundos={restanteEtapa} marca={marca} />
-            <Tiempo etiqueta="Restante del ciclo" segundos={restanteCiclo} marca={marca} />
+            <Tiempo etiqueta="En esta etapa" segundos={enEtapa} />
+            <Tiempo etiqueta="Restante de la etapa" segundos={restanteEtapa} />
+            <Tiempo etiqueta="Restante del ciclo" segundos={restanteCiclo} />
           </>
         )}
       </div>
