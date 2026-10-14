@@ -18,8 +18,7 @@ emulador junto con los flags de producción.
 
 | Script | Producción solo con |
 |---|---|
-| `cerrar-ciclo.js`, `recalcular.js`, `rotar-key.js`, `simulador-prod.js` | `--prod --project stormcip-972bd` (guardarraíles compartidos en `scripts/entorno.js`; además se niegan si encuentran `PROJECT_ID=stormcip-972bd` sin `--prod`) |
-| `simulador-cip.js` | `--prod --project stormcip-972bd` |
+| `cerrar-ciclo.js`, `recalcular.js`, `rotar-key.js`, `simulador-prod.js`, `simulador-cip.js` | `--prod --project stormcip-972bd` (guardarraíles compartidos en `scripts/entorno.js`; además se niegan si encuentran `PROJECT_ID=stormcip-972bd` sin `--prod`) |
 | `seed-prod.js`, `produccion-plantilla.js` | `--project stormcip-972bd --confirmar` (solo producción; 5 s para cancelar) |
 | `seed.js`, `simulador.js`, `simulador-ttn.js` | Nunca: solo emuladores |
 

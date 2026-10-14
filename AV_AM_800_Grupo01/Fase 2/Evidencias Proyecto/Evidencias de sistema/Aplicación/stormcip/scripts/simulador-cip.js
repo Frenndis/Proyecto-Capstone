@@ -21,22 +21,30 @@
 //   npm run sim:cip -- --escenario normal
 //   npm run sim:cip -- --escenario falla --duracion 180
 //
+// Modo --esperar (botón "Iniciar simulación" del dashboard): el proceso no termina.
+// Escribe un latido en simulacionEstado/{linea} y escucha simulacionControl/{linea};
+// cada orden "iniciar" (escenario normal o falla) corre un ciclo completo y "detener"
+// lo deja abortado. Sigue siendo el único que crea ciclos, y no corre si la línea ya
+// tiene uno en curso. El escenario viene en cada orden.
+//   npm run sim:cip -- --esperar
+//
 // Flags:
-//   --escenario normal|falla   (normal)
+//   --escenario normal|falla   (normal; no se usa con --esperar)
 //   --duracion <s>             escala la receta de 300 s (mínimo para etapas de 6 s)
-//   --linea <id>               (cip-01)
-//   --dispositivo <id>         (wqs-lb-01; su lineaId debe coincidir con --linea)
+//   --linea <id>               (cip-01; con --esperar: cip-sim)
+//   --dispositivo <id>         (wqs-lb-01; con --esperar: wqs-sim-01; su lineaId debe
+//                              coincidir con --linea)
 //   --tick <s>                 cada cuánto se escribe estadoProceso (2; mínimo 1,
 //                              por el límite de ~1 escritura/s por documento)
+//   --esperar                  modo escucha, ver arriba
 //   --prod --project stormcip-972bd   producción: ambos flags explícitos,
 //                              credenciales de `gcloud auth application-default login`
+//                              (guardarraíles compartidos en entorno.js)
 
 const path = require("path");
-const { initializeApp, applicationDefault } = require("firebase-admin/app");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
-const { PROJECT_ID } = require("./config");
+const { resolverEntorno, inicializarAdmin } = require("./entorno");
 
-const PROYECTO_PROD = "stormcip-972bd";
 const UPLINK_CADA_S = 10;
 const UPLINK_DESFASE_S = 5;   // ver instantesUplink en modeloCip.ts
 const BATERIA_V = 3.6;
@@ -53,66 +61,62 @@ const arg = (n, def) => {
 };
 const salir = (msg) => { console.error(msg); process.exit(1); };
 
+const ESPERAR = flag("esperar");
 const ESCENARIO = arg("escenario", "normal");
 const DURACION = Number(arg("duracion", 300));
-const LINEA = arg("linea", "cip-01");
-const DISPOSITIVO = arg("dispositivo", "wqs-lb-01");
+const LINEA = arg("linea", ESPERAR ? "cip-sim" : "cip-01");
+const DISPOSITIVO = arg("dispositivo", ESPERAR ? "wqs-sim-01" : "wqs-lb-01");
 const TICK_S = Number(arg("tick", 2));
-const PROD = flag("prod");
-const PROYECTO = arg("project");
 
+if (ESPERAR && flag("escenario")) salir("--esperar recibe el escenario en cada orden del dashboard; no uses --escenario.");
 if (!["normal", "falla"].includes(ESCENARIO)) salir("--escenario debe ser normal o falla");
 if (!Number.isFinite(DURACION) || DURACION <= 0) salir("--duracion debe ser un número de segundos");
 if (!Number.isFinite(TICK_S) || TICK_S < 1) {
   salir("--tick no puede ser menor a 1 s (límite de escrituras por documento de Firestore)");
 }
 
-// ── Entorno: emuladores por defecto, producción solo explícita ─
-let projectId, URL_TTN;
-if (PROD) {
-  if (PROYECTO !== PROYECTO_PROD) salir(`Producción requiere --prod --project ${PROYECTO_PROD} explícitos.`);
-  if (process.env.FIRESTORE_EMULATOR_HOST) {
-    salir("FIRESTORE_EMULATOR_HOST está definido: no se mezcla producción con emuladores.");
-  }
-  projectId = PROYECTO_PROD;
-  URL_TTN = `https://${PROYECTO_PROD}.web.app/api/ttn-uplink`;
-  initializeApp({ credential: applicationDefault(), projectId });
-} else {
-  if (PROYECTO) salir("--project solo se usa junto con --prod. Sin --prod se usan los emuladores.");
-  process.env.FIRESTORE_EMULATOR_HOST ??= "127.0.0.1:8080";
-  projectId = PROJECT_ID;
-  URL_TTN = `http://127.0.0.1:5001/${projectId}/southamerica-west1/ttnUplink`;
-  initializeApp({ projectId });
-}
+// ── Entorno: emuladores por defecto, producción solo explícita (entorno.js) ─
+const entorno = resolverEntorno({ flagsConValor: ["escenario", "duracion", "linea", "dispositivo", "tick"] });
+const PROD = entorno.prod;
+const projectId = entorno.projectId;
+inicializarAdmin(entorno);
+const URL_TTN = PROD
+  ? `https://${projectId}.web.app/api/ttn-uplink`
+  : `http://127.0.0.1:5001/${projectId}/southamerica-west1/ttnUplink`;
 
 // El secreto nunca va en el código: en emuladores es el de functions/.secret.local
 const SECRETO = process.env.TTN_WEBHOOK_SECRET;
 if (!SECRETO) salir("Falta la variable de entorno TTN_WEBHOOK_SECRET.");
 
 // ── Modelo y encoder compilados ──────────────────────────────
-let modelo, encoder, tipos, reloj;
+let modelo, encoder, tipos, reloj, control;
 try {
   const lib = path.join(__dirname, "..", "functions", "lib");
   modelo = require(path.join(lib, "simulacion", "modeloCip"));
   encoder = require(path.join(lib, "wqsEncoder"));
   tipos = require(path.join(lib, "types"));
   reloj = require(path.join(lib, "simulacion", "relojCiclo"));
+  control = require(path.join(lib, "simulacion", "controlSimulacion"));
 } catch {
   salir("No se encontró functions/lib. Corre primero `npm run build` en functions/.");
 }
 
 const db = getFirestore();
 
-// ── Espera interrumpible por Ctrl+C ──────────────────────────
-let abortar = false;
+// ── Espera interrumpible por Ctrl+C o por una orden "detener" ─
+let abortar = false;          // el ciclo en curso debe terminar como abortado
+let salirDelProceso = false;  // Ctrl+C: además, el proceso termina
 let despertar = null;
 const esperar = (ms) => new Promise((r) => {
   if (ms <= 0 || abortar) return r();
   const id = setTimeout(r, ms);
   despertar = () => { clearTimeout(id); r(); };
 });
+let hayCiclo = false;
 process.on("SIGINT", () => {
-  if (abortar) { console.error("\nSegundo Ctrl+C: salida inmediata."); process.exit(1); }
+  if (salirDelProceso) { console.error("\nSegundo Ctrl+C: salida inmediata."); process.exit(1); }
+  salirDelProceso = true;
+  if (ESPERAR && !hayCiclo) { console.log("\nCtrl+C: apago el simulador."); process.exit(0); }
   abortar = true;
   console.log("\nCtrl+C: termino la escritura en curso y dejo el ciclo como abortado…");
   despertar?.();
@@ -127,7 +131,7 @@ function idCiclo(ms) {
 }
 
 /** Crea el ciclo solo si la línea no tiene otro en curso (en la misma transacción). */
-async function crearCiclo(receta, plantaId, t0) {
+async function crearCiclo(receta, plantaId, t0, escenario) {
   const ref = db.doc(`ciclos/${idCiclo(t0)}`);
   await db.runTransaction(async (tx) => {
     const enCurso = await tx.get(db.collection("ciclos")
@@ -140,11 +144,11 @@ async function crearCiclo(receta, plantaId, t0) {
     }
     tx.create(ref, {
       plantaId, lineaId: LINEA, camion: "SIM-DEMO",
-      programa: `Demo CIP ${modelo.duracionReceta(receta)} s (${ESCENARIO})`,
+      programa: `Demo CIP ${modelo.duracionReceta(receta)} s (${escenario})`,
       estado: "en_curso", etapaActual: receta[0].etapa,
       inicio: Timestamp.fromMillis(t0),
       consumos: { aguaTotal: 0, aguaRecuperada: 0, soda: 0, acido: 0 },
-      simulado: true, escenario: ESCENARIO,
+      simulado: true, escenario,
     });
   });
   return ref;
@@ -207,26 +211,25 @@ function programa(receta) {
   return ev.sort((a, b) => a.t - b.t || PRIORIDAD[a.tipo] - PRIORIDAD[b.tipo]);
 }
 
-// ── Principal ────────────────────────────────────────────────
-(async () => {
-  let receta;
-  try { receta = modelo.escalarReceta(modelo.RECETA_DEFECTO, Math.round(DURACION)); }
-  catch (e) { salir(e.message); }
+// ── Preparación y ejecución de UN ciclo ──────────────────────
+/** Revisa el dispositivo y arma los parámetros. Lanza Error con el motivo si algo no calza. */
+async function prepararCiclo() {
+  const receta = modelo.escalarReceta(modelo.RECETA_DEFECTO, Math.round(DURACION));
 
   const dev = await db.doc(`dispositivos/${DISPOSITIVO}`).get();
-  if (!dev.exists) salir(`El dispositivo ${DISPOSITIVO} no existe (¿corriste el seed?).`);
+  if (!dev.exists) throw new Error(`El dispositivo ${DISPOSITIVO} no existe (¿corriste el seed?).`);
   if (dev.get("lineaId") !== LINEA) {
-    salir(`El dispositivo ${DISPOSITIVO} pertenece a la línea ${dev.get("lineaId")}, no a ${LINEA}: ` +
-          "ttnUplink asignaría sus lecturas a otro ciclo.");
+    throw new Error(`El dispositivo ${DISPOSITIVO} pertenece a la línea ${dev.get("lineaId")}, no a ${LINEA}: ` +
+                    "ttnUplink asignaría sus lecturas a otro ciclo.");
   }
   if (!String(dev.get("firmware") ?? "").startsWith("1.2")) {
-    salir(`El encoder genera formato de firmware 1.2; ${DISPOSITIVO} tiene firmware ${dev.get("firmware") ?? "sin registrar"}.`);
+    throw new Error(`El encoder genera formato de firmware 1.2; ${DISPOSITIVO} tiene firmware ${dev.get("firmware") ?? "sin registrar"}.`);
   }
   const modelosActivos = Object.values(dev.get("sondas") ?? {}).filter((s) => s.activa).map((s) => s.modelo);
   for (const m of ["DR-PH01", "DR-ECK1.0"]) {
     if (!modelosActivos.includes(m)) {
-      salir(`El simulador envía las sondas del equipo comprado (DR-PH01 + DR-ECK1.0); ` +
-            `${DISPOSITIVO} no tiene ${m} activa (¿seed antiguo? vuelve a correr npm run seed).`);
+      throw new Error(`El simulador envía las sondas del equipo comprado (DR-PH01 + DR-ECK1.0); ` +
+                      `${DISPOSITIVO} no tiene ${m} activa (¿seed antiguo? vuelve a correr npm run seed).`);
     }
   }
   const devEui = dev.get("devEui") ?? DEV_EUI_SIMULADO;
@@ -238,17 +241,27 @@ function programa(receta) {
     factorCompensacionEC: cfg.factorCompensacionEC ?? tipos.PARAMS_DEFECTO.factorCompensacionEC,
     caudalNominalM3h: cfg.caudalNominalM3h ?? tipos.PARAMS_DEFECTO.caudalNominalM3h,
   };
-  const estadoEn = (t) => modelo.estadoEn(t, receta, ESCENARIO, params);
+  return { receta, devEui, plantaId: dev.get("plantaId") ?? null, params };
+}
 
+/**
+ * Corre un ciclo completo y devuelve "finalizado" o "abortado". Lanza Error si no
+ * se pudo crear (p. ej. la línea ya tiene un ciclo en curso). `alCrear(cicloId)` se
+ * llama en cuanto el ciclo existe.
+ */
+async function ejecutarCiclo(escenario, alCrear = () => {}) {
+  const { receta, devEui, plantaId, params } = await prepararCiclo();
+  const estadoEn = (t) => modelo.estadoEn(t, receta, escenario, params);
+
+  pausaS = 0;
   const t0 = Date.now();
-  let cicloRef;
-  try { cicloRef = await crearCiclo(receta, dev.get("plantaId") ?? null, t0); }
-  catch (e) { salir(e.message); }
+  const cicloRef = await crearCiclo(receta, plantaId, t0, escenario);
   const cicloId = cicloRef.id;
+  alCrear(cicloId);
   const estadoRef = db.doc(`estadoProceso/${LINEA}`);
   const total = modelo.duracionReceta(receta);
 
-  console.log(`Ciclo ${cicloId} · línea ${LINEA} · ${DISPOSITIVO} · escenario ${ESCENARIO} · ${total} s`);
+  console.log(`Ciclo ${cicloId} · línea ${LINEA} · ${DISPOSITIVO} · escenario ${escenario} · ${total} s`);
   console.log(`Entorno: ${PROD ? "PRODUCCIÓN" : "emuladores"} (${projectId}) · uplinks a ${URL_TTN}`);
   console.log(`--- ${receta[0].etapa}`);
 
@@ -296,7 +309,7 @@ function programa(receta) {
         await cicloRef.update({ estado: "finalizado", fin: FieldValue.serverTimestamp(), consumos: r.consumos });
         console.log(`Ciclo ${cicloId} finalizado. alCerrarCiclo calcula los indicadores en unos segundos.`);
         console.log(`Consumos: ${JSON.stringify(r.consumos)}`);
-        process.exit(0);
+        return "finalizado";
       }
     }
   } catch (e) {
@@ -304,8 +317,8 @@ function programa(receta) {
     abortar = true;
   }
 
-  // Abortado (Ctrl+C o error): ciclo cerrado como abortado y estado completo,
-  // con la bomba apagada para que el dashboard no muestre una planta "andando".
+  // Abortado (Ctrl+C, orden "detener" o error): ciclo cerrado como abortado y estado
+  // completo, con la bomba apagada para que el dashboard no muestre una planta "andando".
   const t = tActual();
   const r = estadoEn(t);
   r.estadoProceso.circuito.bomba = { encendida: false, rpm: 0 };
@@ -314,5 +327,95 @@ function programa(receta) {
   await estadoRef.set(docEstado(r, cicloId, t0, "abortado"));
   await cicloRef.update({ estado: "abortado", fin: FieldValue.serverTimestamp(), consumos: r.consumos });
   console.log(`Ciclo ${cicloId} marcado como abortado en t=${t.toFixed(1)} s.`);
-  process.exit(1);
-})();
+  return "abortado";
+}
+
+// ── Modo --esperar: latido y órdenes del dashboard ───────────
+async function modoEsperar() {
+  const estadoSimRef = db.doc(`simulacionEstado/${LINEA}`);
+  const controlRef = db.doc(`simulacionControl/${LINEA}`);
+
+  // Continúa el contador y recuerda la última orden aunque el proceso se reinicie
+  const previo = (await estadoSimRef.get()).data() ?? {};
+  let latido = Number(previo.latido) || 0;
+  const estado = { estado: "libre", ultimaSolicitudId: previo.ultimaSolicitudId ?? null };
+  let ejecutando = null;       // { cicloId, escenario } mientras corre un ciclo
+  let ultimoRechazo = null;
+
+  const escribir = async () => {
+    latido += 1;
+    await estadoSimRef.set({
+      ...control.docEstado(
+        { lineaId: LINEA, latido, ultimaSolicitudId: estado.ultimaSolicitudId, ultimoRechazo },
+        ejecutando,
+      ),
+      latidoEn: FieldValue.serverTimestamp(),
+    });
+  };
+  const latir = () => escribir().catch((e) => console.warn(`latido falló: ${e.message}`));
+
+  console.log(`Modo --esperar · línea ${LINEA} · dispositivo ${DISPOSITIVO}`);
+  console.log(`Entorno: ${PROD ? "PRODUCCIÓN" : "emuladores"} (${projectId}) · uplinks a ${URL_TTN}`);
+  console.log(`Latido cada ${control.LATIDO_CADA_MS / 1000} s en simulacionEstado/${LINEA}; escuchando simulacionControl/${LINEA}. Ctrl+C para apagar.`);
+  await escribir();
+  setInterval(latir, control.LATIDO_CADA_MS);
+
+  const correrCiclo = (escenario) => {
+    estado.estado = "ejecutando";
+    ejecutando = { cicloId: null, escenario };
+    hayCiclo = true;
+    abortar = false;
+    ejecutarCiclo(escenario, (cicloId) => { ejecutando.cicloId = cicloId; latir(); })
+      .catch((e) => { ultimoRechazo = e.message; console.error(`No se pudo iniciar: ${e.message}`); })
+      .finally(() => {
+        ejecutando = null;
+        estado.estado = "libre";
+        hayCiclo = false;
+        abortar = false;
+        if (salirDelProceso) { escribir().finally(() => process.exit(0)); return; }
+        latir();
+      });
+    latir();
+  };
+
+  // Un snapshot a la vez, en orden
+  let cola = Promise.resolve();
+  const alOrden = (orden) => {
+    const solicitadoEnMs = orden?.solicitadoEn?.toMillis ? orden.solicitadoEn.toMillis() : null;
+    const d = control.decidir(orden, estado, { ahoraMs: Date.now(), solicitadoEnMs });
+    if (d.accion === "ignorar") return;
+    estado.ultimaSolicitudId = orden.solicitudId ?? estado.ultimaSolicitudId;
+    if (d.accion === "rechazar") {
+      ultimoRechazo = d.motivo;
+      console.warn(`Orden ${orden?.solicitudId} rechazada: ${d.motivo}`);
+      latir();
+    } else if (d.accion === "detener") {
+      ultimoRechazo = null;
+      console.log(`Orden ${orden.solicitudId}: detener el ciclo ${ejecutando?.cicloId}.`);
+      abortar = true;
+      despertar?.();
+    } else if (d.accion === "iniciar") {
+      ultimoRechazo = null;
+      console.log(`Orden ${orden.solicitudId} (${orden.solicitadoPor}): iniciar escenario ${d.escenario}.`);
+      correrCiclo(d.escenario);
+    }
+  };
+  controlRef.onSnapshot(
+    (snap) => { cola = cola.then(() => alOrden(snap.exists ? snap.data() : null)).catch((e) => console.error(e)); },
+    (e) => console.error(`No se pudo escuchar ${controlRef.path}: ${e.message}`),
+  );
+}
+
+// ── Principal ────────────────────────────────────────────────
+if (ESPERAR) {
+  modoEsperar().catch((e) => salir(`Error: ${e.message}`));
+} else {
+  (async () => {
+    try {
+      const resultado = await ejecutarCiclo(ESCENARIO);
+      process.exit(resultado === "finalizado" ? 0 : 1);
+    } catch (e) {
+      salir(e.message);
+    }
+  })();
+}
