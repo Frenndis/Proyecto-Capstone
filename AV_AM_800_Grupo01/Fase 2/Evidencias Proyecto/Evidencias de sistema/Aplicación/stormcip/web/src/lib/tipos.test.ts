@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SIN_UMBRAL, estaDetenido, estadoIndicadores, formatear, formatearRango } from "./tipos";
+import { SIN_UMBRAL, estaDetenido, estadoIndicadores, formatear, formatearRango, limiteAlerta, textoUmbralAlerta } from "./tipos";
 
 // Marca de tiempo: en el front llega como Timestamp de Firestore, pero
 // estadoIndicadores solo comprueba que exista, así que cualquier valor sirve.
@@ -131,4 +131,28 @@ describe("estaDetenido", () => {
   it("sin marca de tiempo se considera detenido", () => {
     expect(estaDetenido(undefined, AHORA)).toBe(true);
   });
+});
+
+describe("limiteAlerta", () => {
+  it("saturación: ≥ tope, no ≤", () => {
+    expect(limiteAlerta({ tipo: "saturacion", min: null, max: 2000 })).toBe("≥ 2000");
+  });
+  it("umbral de proceso: como formatearRango", () => {
+    expect(limiteAlerta({ tipo: "umbral", min: null, max: 1500 })).toBe("≤ 1500");
+    expect(limiteAlerta({ min: 5, max: 11 })).toBe("5–11");
+  });
+  it("alerta antigua sin tipo: como formatearRango", () => {
+    expect(limiteAlerta({ min: null, max: 60 })).toBe("≤ 60");
+  });
+});
+
+describe("textoUmbralAlerta", () => {
+  it("solo máximo", () => expect(textoUmbralAlerta({ max: 1500 })).toBe("Alerta si > 1500"));
+  it("solo mínimo", () => expect(textoUmbralAlerta({ min: 5 })).toBe("Alerta si < 5"));
+  it("ambos límites", () => expect(textoUmbralAlerta({ min: 5, max: 11 })).toBe("Alerta fuera de 5–11"));
+  it("sin umbral", () => {
+    expect(textoUmbralAlerta(undefined)).toBe(SIN_UMBRAL);
+    expect(textoUmbralAlerta({ min: null, max: null })).toBe(SIN_UMBRAL);
+  });
+  it("un límite 0 es válido", () => expect(textoUmbralAlerta({ min: 0 })).toBe("Alerta si < 0"));
 });

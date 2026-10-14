@@ -5,7 +5,8 @@ export type Umbrales = Record<string, Record<string, Rango>>; // etapa -> variab
 
 // Modelo v2: las mediciones viven en `valores`, los cálculos en `derivados`.
 // `metodo` guarda la fórmula usada y `confianza` si el dato es medido o estimado.
-export type Confianza = "medido" | "estimado";
+// Mismos valores que Confianza en functions/src/types.ts.
+export type Confianza = "medido" | "estimado" | "saturado" | "fuera_de_operacion";
 
 export type Lectura = {
   id: string; v?: number; ts: any; etapa: string; deviceId: string;
@@ -17,7 +18,13 @@ export type Lectura = {
 
 export type UltimaLecturaDispositivo = {
   ts: any; valores: Record<string, number | null>; derivados?: Record<string, number>;
+  confianza?: Record<string, Confianza>;
+  /** Variable → motivo: llegó en esta lectura pero el backend no la guardó. */
+  descartadas?: Record<string, string>;
 };
+
+// Sonda de dispositivos/{id}.sondas (solo lo lee un admin, ver firestore.rules).
+export type SondaDispositivo = { sondaId: string; modelo: string; activa: boolean };
 
 // Timestamp de Firestore, declarado por la forma en que se usa (toDate) en vez de
 // importar el tipo del SDK: así los módulos que solo formatean fechas no dependen
@@ -47,6 +54,8 @@ export type Ciclo = {
   // de confirmarse en el servidor.
   indicadoresCalculadosEn?: MarcaTiempo | null;             // marca de que el trigger corrió
   ultimaLectura?: Record<string, UltimaLecturaDispositivo>; // anidada por deviceId
+  // Variables que cada dispositivo reportó alguna vez en el ciclo (solo crece)
+  variablesVistas?: Record<string, string[]>;
 };
 
 // Estado de planta en vivo (estadoProceso/{lineaId}): lo que vendría del PLC.
@@ -99,6 +108,8 @@ export type Alerta = {
   id: string; cicloId: string; lineaId?: string | null; etapa: string; variable: string;
   ultimoValor: number; min: number | null; max: number | null;
   severidad: string; desde: any; hasta: any; conteo?: number; reconocida: boolean;
+  // "saturacion": la sonda llegó a su tope y `max` es ese tope, no un límite de proceso
+  tipo?: "umbral" | "saturacion";
 };
 
 export const META: Record<string, { label: string; unidad: string; decimales?: number }> = {
@@ -158,6 +169,28 @@ export function formatearRango(r?: { min?: number | null; max?: number | null })
   if (max !== null) return `≤ ${max}`;
   if (min !== null) return `≥ ${min}`;
   return SIN_UMBRAL;
+}
+
+/**
+ * Umbral de ALERTA de proceso, en palabras: "Alerta si > 1500", "Alerta si < 5",
+ * "Alerta fuera de 5–11". No es el criterio de limpieza ni un valor objetivo.
+ */
+export function textoUmbralAlerta(r?: { min?: number | null; max?: number | null }) {
+  const min = r?.min ?? null;
+  const max = r?.max ?? null;
+  if (min !== null && max !== null) return `Alerta fuera de ${min}–${max}`;
+  if (max !== null) return `Alerta si > ${max}`;
+  if (min !== null) return `Alerta si < ${min}`;
+  return SIN_UMBRAL;
+}
+
+/**
+ * Límite de una alerta. En las de saturación `max` es el tope de la sonda: el
+ * valor real es "al menos" eso, así que se escribe "≥ tope" y no "≤ tope".
+ */
+export function limiteAlerta(a: Pick<Alerta, "tipo" | "min" | "max">) {
+  return a.tipo === "saturacion" && a.max !== null && a.max !== undefined
+    ? `≥ ${a.max}` : formatearRango(a);
 }
 
 export function formatear(variable: string, valor?: number | null) {
