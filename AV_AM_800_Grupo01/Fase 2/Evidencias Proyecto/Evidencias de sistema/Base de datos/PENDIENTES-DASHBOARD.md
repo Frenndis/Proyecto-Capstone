@@ -142,3 +142,39 @@ Si `min` no existe, imprime "—" y luego "–3000".
   - El aviso de **"sin datos"** se basa en la **última medición**, no en `ultimoPing`: un equipo puede seguir enviando su estado cada 12 h (señal viva) y no medir nada. Solo aplica con un ciclo `en_curso` (`ultimaLectura` vive en el ciclo).
 - **Batería:** `bateriaV` con la fecha de `estadoRecibidoEn`. El umbral de alerta hay que sacarlo del manual del WQS-LB (no se conoce todavía).
 - **Campo `alimentacion` en `dispositivos` (`"bateria"` | `"externa"`), sin implementar:** con fuente externa de 3,3 V el voltaje que reporta el equipo **no es de una batería** y no debe alertar con el umbral de batería. La tarjeta lo mostraría como "alimentación externa" y no evaluaría el umbral. Se escribe a mano (Admin SDK, como `sondas`), igual que `firmware`; sin el campo se asume `"bateria"`.
+
+---
+
+## 13. Tope de saturación guardado en cada lectura (mejora futura, sin implementar)
+
+**Contexto (paso 1 del dashboard, tarjetas):** la web necesita el tope de la sonda para escribir "≥ tope". Importar `CATALOGO_SONDAS` desde `functions/src/types.ts` no funciona: `next build` (`output: "export"`, Next 16) no resuelve archivos fuera de `web/` sin cambiar `turbopack.root` / `externalDir`. Por eso hoy hay una **copia** en `web/src/lib/catalogo.ts`, y `catalogo.test.ts` la compara con el original (falla si se desfasan). Además, las tarjetas filtran por las sondas de `dispositivos/{id}.sondas`, de modo que el dashboard (solo admin) lee ese documento; esto matiza lo dicho en el punto 10 ("no requiere leer `dispositivos`").
+
+**Mejora propuesta (opción C):** que `ingest` guarde el tope junto al dato, por ejemplo `ultimaLectura.{deviceId}.topes` (y/o en cada `lecturas/{id}`), con el `max` que ya sale de `CATALOGO_SONDAS` al validar. La web leería el tope del documento y se podría borrar la copia del catálogo y su test.
+
+**Costo:** toca backend y el esquema de las lecturas (campo nuevo, retrocompatible: las lecturas antiguas no lo tienen y la web debería seguir usando el catálogo como respaldo).
+
+---
+
+## 14. Punto ciego: sin temperatura no salta la alerta de umbral de conductividad — PRIORIDAD ALTA
+
+**Resolver antes de la prueba con hardware real.** Hallazgo (14 oct 2026), verificado leyendo el código, sin cambios hechos.
+
+**Qué pasa:**
+- Los umbrales de conductividad (1500 en preenjuague y enjuague, 300 en enjuague final; `seed.js`, `seed-prod.js`) están sobre **`conductividad25C`**, no sobre `conductividad`. `alertasDeLectura` (`ingest.ts`) evalúa `{...numericos, ...derivados}` contra `configuracion/umbrales`.
+- `derivarLectura` (`calculos.ts`) no calcula `conductividad25C` si no hay una temperatura utilizable: ninguna de `tempEc` / `tempSonda` / `tempExterna` con número, o la elegida está saturada o fuera de operación, o la conductividad está fuera de operación. Sin derivado, **no se evalúa ningún umbral de conductividad** y la lectura pasa sin alerta.
+- Sigue funcionando la alerta de **saturación** (`{ciclo}_{etapa}_conductividad_saturacion`): es independiente de la temperatura y de los umbrales. Solo avisa si la sonda topa (2000 µS/cm con la ECK1.0); no cubre, por ejemplo, 1800 µS/cm en el enjuague final.
+- Efecto en `tiempoHastaLimpio`: una lectura sin `conductividad25C` nunca cuenta como limpia. Si ninguna lectura del enjuague final la tiene, el indicador queda vacío; si solo faltan algunas, se calcula con las demás.
+- La web ya lo muestra (tarjeta "sin compensar a 25 °C" con la causa cuando se deduce), pero **no genera alerta**.
+
+**Propuesta, no una decisión del equipo.** Opciones a evaluar:
+- **(a) Alerta "conductividad sin compensar":** cuando hay `conductividad` y no se pudo calcular `conductividad25C` en una etapa monitoreada, disparar una alerta propia (por ejemplo `{ciclo}_{etapa}_conductividad_sin_compensar`, `tipo: "sin_compensar"`, como se hizo con `tipo: "saturacion"`). Avisa que falta información, pero no dice si el valor es alto.
+- **(b) Umbral de respaldo sobre la conductividad cruda:** un umbral por etapa en `configuracion/umbrales` para `conductividad`, que se evalúe solo cuando falta el derivado. Sí detecta valores altos. Ojo: la cruda depende de la temperatura (~2 %/°C), así que el valor de respaldo tendría que elegirse con margen y documentarse como aproximado.
+- (a) y (b) no son excluyentes. Hay que decidir también si la alerta aplica con la conductividad fuera de operación, que hoy no se evalúa por diseño.
+
+---
+
+## 15. `useSondasDispositivo` depende de que el dashboard sea solo admin
+
+El hook (`web/src/hooks/useDatosCip.ts`) lee `dispositivos/{id}` para filtrar las tarjetas por las sondas activas, y las reglas (`firestore.rules`) solo dejan leer `dispositivos` a un admin. Hoy funciona porque `/dashboard` está protegido con `GuardRol roles={["admin"]}`.
+
+**Al habilitar el rol operador**, revisar los permisos de lectura de `dispositivos`: con el mismo hook un operador recibiría `permission-denied`, el hook caería al respaldo (mostrar todo lo visto, sin filtrar por sondas) y volverían las tarjetas de configuraciones antiguas. Opciones: abrir la lectura de `dispositivos` al operador (o de un subconjunto), o resolverlo con el punto 13 (guardar topes y sondas en el ciclo), que evita leer `dispositivos` desde la web.

@@ -74,6 +74,25 @@ Anotar del log de arranque:
 - La URL de `ttnUplink` (algo como `http://127.0.0.1:5001/stormcip-dev/southamerica-west1/ttnUplink`).
 - La URL de la Emulator UI (por defecto `http://127.0.0.1:4000`), para inspeccionar Firestore.
 
+## Errores comunes y lecciones
+
+Cosas que ya costaron tiempo. Léelas antes de levantar los emuladores.
+
+**Emuladores**
+- **Levántalos desde `cmd.exe`**, no desde PowerShell: Java no está en el PATH de PowerShell.
+- **Si las funciones no cargan** ("Failed to load function definition ... Timeout after 10000"), levanta con `FUNCTIONS_DISCOVERY_TIMEOUT=60`. En `cmd.exe`: `set FUNCTIONS_DISCOVERY_TIMEOUT=60` y luego `firebase emulators:start --project stormcip-dev`. Sin eso, `sim:ttn` responde 404 "Function ... does not exist".
+- **Corre `npm run build` en `functions/` después de cada cambio** en `functions/src/`: el emulador usa `lib/`, no recompila el TypeScript.
+- **No uses `npm run serve`** en `functions/`: solo levanta Functions (ver sección 2).
+
+**Simuladores**
+- **`sim:cip` pide `TTN_WEBHOOK_SECRET=test-secret`** (en `cmd.exe`: `set TTN_WEBHOOK_SECRET=test-secret`). Sin la variable termina con "Falta la variable de entorno TTN_WEBHOOK_SECRET".
+- **`sim:cip` no corre con un ciclo abierto** en la línea (el seed deja `CIP-2026-0001` abierto). Ciérralo antes con `node cerrar-ciclo.js CIP-2026-0001` (desde `scripts/`).
+- **`seed.js` es solo para emuladores. Nunca lo corras contra producción** (para producción existe `seed-prod.js`, con `--project` y `--confirmar`).
+
+**Despliegue** (ver `DESPLIEGUE.md`)
+- **En PowerShell, `--only` va entre comillas**: `--only "functions:a,functions:b"`. Sin comillas PowerShell parte el valor en la coma. **Nunca quites `--only`**: sin él se despliega todo.
+- **`firestore:rules` reemplaza las reglas completas** del proyecto, no las mezcla con las que ya hay publicadas.
+
 ## 3) Seed y simulador
 
 En otra terminal, dentro de `scripts/`:
