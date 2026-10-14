@@ -6,7 +6,11 @@ import {
   useAlertas, useCicloMostrado, useHistorialAlertas, useLecturas, useSondasDispositivo,
   useUmbrales, ultimaLecturaReciente,
 } from "@/hooks/useDatosCip";
+import { useEstadoProceso } from "@/hooks/useEstadoProceso";
+import { useAhora } from "@/hooks/useAhora";
 import TarjetaSonda from "@/components/TarjetaSonda";
+import BarraEtapas from "@/components/BarraEtapas";
+import PanelesProceso from "@/components/PanelesProceso";
 import GraficoTendencia from "@/components/GraficoTendencia";
 import PanelAlertas from "@/components/PanelAlertas";
 import HistorialAlertas from "@/components/HistorialAlertas";
@@ -42,6 +46,8 @@ function Dashboard() {
   // Sin lectura aún, el equipo es el primero que reportó variables en el ciclo
   const deviceId = reciente.deviceId ?? Object.keys(ciclo?.variablesVistas ?? {})[0];
   const { sondas, cargando: cargandoSondas } = useSondasDispositivo(deviceId);
+  const { estado: proceso, cargando: cargandoProceso, detenido } = useEstadoProceso(ciclo?.lineaId);
+  const ahora = useAhora();
 
   // GuardRol ya garantiza sesión y rol antes de montar este componente.
   if (!user) return null;
@@ -87,6 +93,8 @@ function Dashboard() {
           </div>
         </section>
 
+        <BarraEtapas ciclo={ciclo} proceso={proceso} detenido={detenido} ahora={ahora} />
+
         {/* Sin este aviso, las tarjetas y la tendencia de un ciclo ya cerrado se
             leen como si fueran datos de ahora. */}
         {!enVivo && (
@@ -118,6 +126,9 @@ function Dashboard() {
                 estado={estadoTarjeta(v, lectura, sondas)} />
             ))}
         </section>
+
+        <PanelesProceso cicloId={ciclo.id} proceso={proceso} cargando={cargandoProceso}
+          detenido={detenido} />
 
         <section className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
           <div className="mb-3 flex items-center justify-between">
