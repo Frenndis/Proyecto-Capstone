@@ -1,6 +1,6 @@
 // Lógica pura de la barra de etapas y de los paneles de estado de planta.
 // Sin React ni Firestore, para poder testearla.
-import { EstadoProceso, MarcaTiempo } from "./tipos";
+import { ETAPAS_MONITOREADAS, EstadoProceso, MarcaTiempo } from "./tipos";
 
 // Mismo orden que ETAPAS en functions/src/types.ts (etapas.test.ts lo compara).
 export const ETAPAS_ORDEN = [
@@ -13,14 +13,16 @@ export type EstadoEtapa = "hecha" | "actual" | "pendiente";
  * Estado de cada etapa de la barra. `etapaActual` es la que escribe quien maneja
  * el ciclo (operador, script director o simulador); un ciclo finalizado tiene
  * todas las etapas hechas. Una etapa desconocida deja todas pendientes en vez
- * de adivinar.
+ * de adivinar. `monitoreada` es false en las etapas químicas: las sondas WQS no
+ * miden dentro de su rango físico y la web no calcula tendencia ni indicadores.
  */
 export function estadoEtapas(
   etapaActual: string | undefined, estadoCiclo: string | undefined,
-): { etapa: string; estado: EstadoEtapa }[] {
+): { etapa: string; estado: EstadoEtapa; monitoreada: boolean }[] {
   const actual = ETAPAS_ORDEN.findIndex((e) => e === etapaActual);
   return ETAPAS_ORDEN.map((etapa, i) => ({
     etapa,
+    monitoreada: ETAPAS_MONITOREADAS.includes(etapa),
     estado: estadoCiclo === "finalizado" ? "hecha"
       : actual === -1 ? "pendiente"
       : i < actual ? "hecha" : i === actual ? "actual" : "pendiente",
@@ -69,6 +71,39 @@ export function segundosEnEtapa(
   if (!p || detenido || ciclo.estado !== "en_curso" || p.estadoCiclo !== "en_curso") return null;
   if (p.etapa !== ciclo.etapaActual || !p.etapaInicio?.toDate) return null;
   return Math.max(0, (ahoraMs - p.etapaInicio.toDate().getTime()) / 1000);
+}
+
+/**
+ * Tiempo restante de la etapa actual: la duración de la etapa que informa
+ * estadoProceso menos el tiempo ya transcurrido en ella. Las duraciones solo
+ * existen en ese documento (hoy las escribe el simulador): el ciclo no las
+ * guarda. Mismas condiciones de vigencia que segundosEnEtapa; si no se cumplen, null.
+ */
+export function segundosRestantesEtapa(
+  ciclo: { id: string; etapaActual?: string; estado?: string },
+  proceso: EstadoProceso | null | undefined, detenido: boolean, ahoraMs: number,
+): number | null {
+  const enEtapa = segundosEnEtapa(ciclo, proceso, detenido, ahoraMs);
+  const dur = proceso?.etapaDuracionS;
+  if (enEtapa === null || typeof dur !== "number" || !(dur > 0)) return null;
+  return Math.max(0, dur - enEtapa);
+}
+
+/**
+ * Tiempo restante del ciclo: cicloDuracionS menos `transcurridoS` de estadoProceso
+ * más lo que pasó desde que se escribió (el documento se actualiza cada pocos
+ * segundos). transcurridoS ya descuenta las pausas del simulador. null si el
+ * documento no es de este ciclo, no está vigente o el ciclo no está en curso.
+ */
+export function segundosRestantesCiclo(
+  ciclo: { id: string; estado?: string },
+  proceso: EstadoProceso | null | undefined, detenido: boolean, ahoraMs: number,
+): number | null {
+  const p = procesoDelCiclo(proceso, ciclo.id);
+  if (!p || detenido || ciclo.estado !== "en_curso" || p.estadoCiclo !== "en_curso") return null;
+  if (!(p.cicloDuracionS > 0) || typeof p.transcurridoS !== "number" || !p.actualizadoEn?.toDate) return null;
+  const desdeEscritura = Math.max(0, (ahoraMs - p.actualizadoEn.toDate().getTime()) / 1000);
+  return Math.max(0, p.cicloDuracionS - (p.transcurridoS + desdeEscritura));
 }
 
 export const ETIQUETA_ORIGEN: Record<string, string> = {

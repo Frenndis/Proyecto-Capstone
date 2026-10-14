@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 // El orden de etapas de la web es una copia: este test falla si se desfasa.
-import { ETAPAS } from "../../../functions/src/types";
+import { ETAPAS, ETAPAS_MONITOREADAS as MONITOREADAS_BACKEND } from "../../../functions/src/types";
 import {
   ETAPAS_ORDEN, estadoEtapas, formatearDuracion, procesoDelCiclo, segundosDelCiclo, segundosEnEtapa,
+  segundosRestantesCiclo, segundosRestantesEtapa,
 } from "./etapas";
-import { EstadoProceso } from "./tipos";
+import { ETAPAS_MONITOREADAS, EstadoProceso } from "./tipos";
 
 const T0 = Date.parse("2026-10-14T12:00:00Z");
 const marca = (offsetS: number) => ({ toDate: () => new Date(T0 + offsetS * 1000) });
@@ -15,7 +16,20 @@ describe("ETAPAS_ORDEN", () => {
   });
 });
 
+describe("ETAPAS_MONITOREADAS", () => {
+  it("es idéntico al del backend", () => {
+    expect([...ETAPAS_MONITOREADAS]).toEqual([...MONITOREADAS_BACKEND]);
+  });
+});
+
 describe("estadoEtapas", () => {
+  it("las etapas químicas no son monitoreadas", () => {
+    const m = Object.fromEntries(estadoEtapas("enjuague", "en_curso").map((e) => [e.etapa, e.monitoreada]));
+    expect(m).toEqual({
+      preenjuague: true, alcalino: false, enjuague: true, acido: false, enjuague_final: true, desinfeccion: false,
+    });
+  });
+
   const estados = (etapa?: string, ciclo?: string) => estadoEtapas(etapa, ciclo).map((e) => e.estado);
 
   it("marca hechas las anteriores, la actual y pendientes las siguientes", () => {
@@ -105,5 +119,49 @@ describe("segundosEnEtapa", () => {
   it("null sin etapaInicio confirmado o sin estadoProceso", () => {
     expect(segundosEnEtapa(ciclo, proceso({ etapaInicio: null }), false, ahora)).toBeNull();
     expect(segundosEnEtapa(ciclo, null, false, ahora)).toBeNull();
+  });
+});
+
+const procesoConDuraciones = (p: Partial<EstadoProceso> = {}) => proceso({
+  etapaDuracionS: 60, cicloDuracionS: 300, transcurridoS: 100,
+  actualizadoEn: marca(130), ...p,
+} as Partial<EstadoProceso>);
+
+describe("segundosRestantesEtapa", () => {
+  const ahora = T0 + 130_000; // 30 s en la etapa (etapaInicio = +100 s)
+  it("duración de la etapa menos lo transcurrido en ella", () => {
+    expect(segundosRestantesEtapa(ciclo, procesoConDuraciones(), false, ahora)).toBe(30);
+  });
+  it("nunca negativo", () => {
+    expect(segundosRestantesEtapa(ciclo, procesoConDuraciones({ etapaDuracionS: 20 }), false, ahora)).toBe(0);
+  });
+  it("null si falta la duración o no es válida", () => {
+    expect(segundosRestantesEtapa(ciclo, procesoConDuraciones({ etapaDuracionS: 0 }), false, ahora)).toBeNull();
+    expect(segundosRestantesEtapa(ciclo, procesoConDuraciones({ etapaDuracionS: undefined }), false, ahora)).toBeNull();
+  });
+  it("null si el estado de planta no es vigente", () => {
+    expect(segundosRestantesEtapa(ciclo, procesoConDuraciones(), true, ahora)).toBeNull();
+    expect(segundosRestantesEtapa(ciclo, procesoConDuraciones({ cicloId: "OTRO" }), false, ahora)).toBeNull();
+    expect(segundosRestantesEtapa(ciclo, null, false, ahora)).toBeNull();
+  });
+});
+
+describe("segundosRestantesCiclo", () => {
+  it("duración del ciclo menos transcurrido, sumando lo que pasó desde la última escritura", () => {
+    // escrito en +130 s con 100 s transcurridos; ahora +135 s → 105 s transcurridos
+    expect(segundosRestantesCiclo(ciclo, procesoConDuraciones(), false, T0 + 135_000)).toBe(195);
+  });
+  it("nunca negativo", () => {
+    expect(segundosRestantesCiclo(ciclo, procesoConDuraciones({ transcurridoS: 400 }), false, T0 + 135_000)).toBe(0);
+  });
+  it("un reloj atrasado no suma tiempo negativo", () => {
+    expect(segundosRestantesCiclo(ciclo, procesoConDuraciones(), false, T0 + 120_000)).toBe(200);
+  });
+  it("null si no es vigente, no es del ciclo, el ciclo no está en curso o faltan datos", () => {
+    expect(segundosRestantesCiclo(ciclo, procesoConDuraciones(), true, T0)).toBeNull();
+    expect(segundosRestantesCiclo(ciclo, procesoConDuraciones({ cicloId: "OTRO" }), false, T0)).toBeNull();
+    expect(segundosRestantesCiclo({ ...ciclo, estado: "finalizado" }, procesoConDuraciones(), false, T0)).toBeNull();
+    expect(segundosRestantesCiclo(ciclo, procesoConDuraciones({ cicloDuracionS: 0 }), false, T0)).toBeNull();
+    expect(segundosRestantesCiclo(ciclo, procesoConDuraciones({ actualizadoEn: null }), false, T0)).toBeNull();
   });
 });
