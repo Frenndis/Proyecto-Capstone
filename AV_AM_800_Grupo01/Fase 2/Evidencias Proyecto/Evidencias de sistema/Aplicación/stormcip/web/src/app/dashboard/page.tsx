@@ -59,6 +59,10 @@ function Dashboard() {
   const graficables = GRAFICABLES.filter((v) => variables.includes(v));
   // La variable elegida puede dejar de existir si cambia el equipo o el ciclo
   const graficoActual = graficables.includes(grafico) ? grafico : graficables[0];
+  // Eje de tiempo de la tendencia: del inicio del ciclo a su fin, o a "ahora"
+  // (redondeado a 5 s para no redibujar el gráfico cada segundo) si sigue en curso
+  const inicioMs = ciclo?.inicio?.toDate ? ciclo.inicio.toDate().getTime() : null;
+  const finMs = ciclo?.fin?.toDate ? ciclo.fin.toDate().getTime() : Math.floor(ahora / 5000) * 5000;
   const etapaFueraDeAlcance = enVivo && etapa !== "" && !ETAPAS_MONITOREADAS.includes(etapa);
 
   return (
@@ -139,10 +143,11 @@ function Dashboard() {
             </select>
           </div>
           {graficoActual
-            ? <GraficoTendencia lecturas={lecturas} variable={graficoActual} rango={rangos[graficoActual]} />
+            ? <GraficoTendencia lecturas={lecturas} variable={graficoActual} rango={rangos[graficoActual]}
+                inicioMs={inicioMs} finMs={finMs} />
             : <p className="text-sm text-slate-500">Sin variables graficables todavía.</p>}
           <p className="mt-2 text-xs text-slate-500">
-            Últimas {lecturas.length} lecturas del ciclo.
+            {lecturas.length} lectura{lecturas.length === 1 ? "" : "s"} del ciclo, desde su inicio.
           </p>
         </section>
 

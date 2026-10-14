@@ -68,7 +68,9 @@ export function useCicloMostrado() {
   };
 }
 
-export function useLecturas(cicloId?: string, n = 60) {
+// n alto: la tendencia muestra el ciclo desde su inicio, no solo lo último. Las
+// más recientes siempre entran (orden descendente); el backend avisa en 5000.
+export function useLecturas(cicloId?: string, n = 500) {
   const [lecturas, setLecturas] = useState<Lectura[]>([]);
   useEffect(() => {
     if (!cicloId) { setLecturas([]); return; }
