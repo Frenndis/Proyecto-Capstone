@@ -11,6 +11,9 @@ import { useAhora } from "@/hooks/useAhora";
 import TarjetaSonda from "@/components/TarjetaSonda";
 import BarraEtapas from "@/components/BarraEtapas";
 import PanelesProceso from "@/components/PanelesProceso";
+import ControlSimulacion from "@/components/ControlSimulacion";
+import { useSeleccionLinea } from "@/hooks/useSeleccionLinea";
+import { ETIQUETA_SELECCION, SELECCIONES, SeleccionLinea, lineaDe } from "@/lib/lineas";
 import GraficoTendencia from "@/components/GraficoTendencia";
 import PanelAlertas from "@/components/PanelAlertas";
 import HistorialAlertas from "@/components/HistorialAlertas";
@@ -36,7 +39,9 @@ export default function DashboardPage() {
 
 function Dashboard() {
   const { user, rol, salir } = useAuth();
-  const { ciclo, enVivo, cargando: cargandoCiclo } = useCicloMostrado();
+  // Línea que se muestra (recordada en el navegador)
+  const [seleccion, elegirLinea] = useSeleccionLinea();
+  const { ciclo, enVivo, cargando: cargandoCiclo } = useCicloMostrado(lineaDe(seleccion));
   const lecturas = useLecturas(ciclo?.id);
   const alertas = useAlertas();
   const historialAlertas = useHistorialAlertas();
@@ -74,8 +79,20 @@ function Dashboard() {
           </h1>
           <p className="text-sm text-slate-500">{user.email} · rol: {rol ?? "sin rol"}</p>
         </div>
-        <button onClick={salir} className="rounded-lg border px-3 py-1 text-sm">Salir</button>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-sm">
+            Línea
+            <select value={seleccion} onChange={(e) => elegirLinea(e.target.value as SeleccionLinea)}
+              className="rounded-md border px-2 py-1 text-sm dark:bg-slate-900">
+              {SELECCIONES.map((sel) => <option key={sel} value={sel}>{ETIQUETA_SELECCION[sel]}</option>)}
+            </select>
+          </label>
+          <button onClick={salir} className="rounded-lg border px-3 py-1 text-sm">Salir</button>
+        </div>
       </header>
+
+      {/* Solo el rol admin llega aquí (GuardRol) y las reglas también lo exigen */}
+      {seleccion !== "real" && <ControlSimulacion />}
 
       {cargandoCiclo ? <p className="text-slate-500">Buscando ciclo…</p>
        : !ciclo ? <p className="rounded-lg border border-dashed p-6 text-slate-500">

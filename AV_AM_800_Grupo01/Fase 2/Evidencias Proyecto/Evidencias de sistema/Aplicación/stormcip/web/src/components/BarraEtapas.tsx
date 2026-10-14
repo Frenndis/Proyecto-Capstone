@@ -1,12 +1,12 @@
 "use client";
-import { ETAPA_LABEL, EstadoProceso } from "@/lib/tipos";
+import { ETAPA_LABEL, EstadoProceso, MarcaTiempo } from "@/lib/tipos";
 import {
   estadoEtapas, formatearDuracion, segundosDelCiclo, segundosEnEtapa,
   segundosRestantesCiclo, segundosRestantesEtapa,
 } from "@/lib/etapas";
 
 type CicloBarra = {
-  id: string; etapaActual?: string; estado?: string; inicio?: any; fin?: any;
+  id: string; etapaActual?: string; estado?: string; inicio?: MarcaTiempo | null; fin?: MarcaTiempo | null;
 };
 
 function Tiempo({ etiqueta, segundos }: { etiqueta: string; segundos: number | null }) {
