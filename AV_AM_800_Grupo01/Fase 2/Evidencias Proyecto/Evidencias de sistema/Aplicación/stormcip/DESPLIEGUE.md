@@ -107,6 +107,95 @@ necesita desplegar `setUserRole` u `onUserCreated`, agregarlas explícitas al
 mismo `--only`, separadas por coma — decidir eso recién después de comparar
 con el paso 1.
 
+## 3.1) Orden obligatorio al desplegar el dashboard completo (reglas → funciones → Hosting)
+
+Aplica cuando se despliega `feature/HL` (dashboard nuevo + backend nuevo). Cada
+paso se aprueba por separado y **no se cambia el orden**:
+
+1. **Reglas** (`firestore.rules`). El dashboard nuevo lee `estadoProceso`; sin la
+   regla recibiría `permission-denied`. `firestore:rules` **reemplaza las reglas
+   completas** del proyecto: antes, comparar las publicadas en la consola con las
+   del repo (la única diferencia esperada contra la rama CR es el bloque
+   `estadoProceso`). Los índices no cambian (`firestore.indexes.json` es idéntico).
+
+   ```
+   firebase deploy --project stormcip-972bd --only firestore:rules
+   ```
+
+2. **Funciones**, solo las que cambiaron y siempre con `--only`. En PowerShell el
+   valor va **entre comillas** (sin ellas la coma lo parte):
+
+   ```
+   firebase deploy --project stormcip-972bd --only "functions:ttnUplink,functions:ingestLectura,functions:alCerrarCiclo,functions:recalcularIndicadores"
+   ```
+
+   El `predeploy` compila `functions/` (`npm run build`). Las funciones nuevas
+   escriben campos que el dashboard nuevo muestra (`confianza`, `descartadas`,
+   `variablesVistas`), por eso van antes que Hosting.
+
+3. **Hosting** (dashboard), con el build de producción de la sección siguiente.
+
+   ```
+   firebase deploy --project stormcip-972bd --only hosting
+   ```
+
+### Configuración de Firestore que el código nuevo espera (antes del paso 2)
+
+El despliegue no cambia datos. Revisar la configuración de producción con el
+script de solo lectura (no lee `apiKeyHash`; usa las credenciales de
+`gcloud auth application-default login`):
+
+```
+cd scripts
+node revisar-config-prod.js --prod --project stormcip-972bd
+```
+
+Lo que debe haber (valores de `seed-prod.js`; provisionales hasta confirmarlos con el cliente):
+
+| Documento | Debe tener |
+|---|---|
+| `configuracion/umbrales` | `preenjuague` y `enjuague`: `ph` 5–11, `conductividad25C` máx 1500. `enjuague_final`: `ph` 6–8,5, `conductividad25C` máx 300. Sin umbrales de turbidez. |
+| `configuracion/calculos` | `factorCompensacionEC` 0,02; `conductividadAguaRed` 150; `caudalNominalM3h` 18; `criterioLimpio` `{ conductividad25C: 200, turbidez: 10 }` (criterio de limpieza, distinto del umbral de alerta). |
+| `dispositivos/<id del WQS-LB>` | `tipo: "wqs-lb"`, `activo: true`, `lineaId` de la línea con ciclo en curso, `firmware: "1.2"` (texto con una versión) y `sondas` activas `DR-PH01` + `DR-ECK1.0` (ninguna otra activa: ECK10.0, turbidez, DS18B20). |
+
+El script imprime `FALTA` con el valor actual y el esperado de cada diferencia;
+esos son los cambios exactos a hacer a mano en la consola.
+
+### Build de Hosting con la configuración de producción
+
+`web/.env.local` es la configuración de **desarrollo** (proyecto `stormcip-dev` y
+`NEXT_PUBLIC_USE_EMULATORS=true`). Un `next build` con solo ese archivo dejaría el
+sitio apuntando a los emuladores y al proyecto de desarrollo. **No editar
+`web/.env.local`**: crear `web/.env.production.local`, que `next build` lee con
+más prioridad (orden: `.env.production.local` → `.env.local` → `.env.production`
+→ `.env`; el log del build lo confirma: "Environments: .env.production.local,
+.env.local"). Está ignorado por git (`.env*`): cada máquina de build lo crea.
+
+```
+NEXT_PUBLIC_FB_API_KEY=<apiKey de la app web de stormcip-972bd>
+NEXT_PUBLIC_FB_AUTH_DOMAIN=stormcip-972bd.firebaseapp.com
+NEXT_PUBLIC_FB_PROJECT_ID=stormcip-972bd
+NEXT_PUBLIC_FB_APP_ID=<appId de la app web de stormcip-972bd>
+NEXT_PUBLIC_USE_EMULATORS=false
+```
+
+Los valores salen de la consola de Firebase (Configuración del proyecto → Tus
+apps → Configuración del SDK). Construir y **verificar antes de desplegar**:
+
+```
+cd web
+npm run build
+cd ../scripts
+node verificar-build-web.js
+```
+
+`verificar-build-web.js` lee `web/out` y falla (código 1) si encuentra `127.0.0.1`
+(emuladores) o `stormcip-dev`, o si no aparece `stormcip-972bd`. Si falla, no
+desplegar. Después de cualquier build local de desarrollo, `web/out` queda con la
+configuración de desarrollo: volver a construir con producción antes de cada
+deploy de Hosting. Si el build falla con `EBUSY` sobre `web/out`, algo tiene la
+carpeta abierta (por ejemplo el emulador de Hosting): detenerlo y reintentar.
+
 ## 4) Prueba de humo (no escribe nada en Firestore)
 
 Antes de tocar la consola de TTS, probar la función ya desplegada
@@ -235,8 +324,9 @@ primer FPort 5 real (ver `modelo-datos-sensores.md`, sección 5.4b).
 
 ## 7) Fuera de esta guía
 
-- `firestore.rules` y `hosting` **no se despliegan acá** — se coordinan
-  aparte con el grupo antes de tocarlos.
+- `firestore.rules` y `hosting` **no se despliegan con los pasos 1 a 4** — se
+  coordinan aparte con el grupo antes de tocarlos; el orden y los comandos están
+  en la sección 3.1.
 - Configurar el webhook real en la consola de TTS requiere tener el
   dispositivo físico aprovisionado ahí primero (fuera del alcance de este
   documento).
