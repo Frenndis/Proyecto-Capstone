@@ -195,6 +195,44 @@ configuración de desarrollo: volver a construir con producción antes de cada
 deploy de Hosting. Si el build falla con `EBUSY` sobre `web/out`, algo tiene la
 carpeta abierta (por ejemplo el emulador de Hosting): detenerlo y reintentar.
 
+### Incidente (9 oct 2026): Hosting publicado con la configuración de desarrollo
+
+**Qué pasó.** El sitio publicado dejó de permitir iniciar sesión. En la consola del navegador:
+`POST http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=fake-api-key-for-emulators … net::ERR_CONNECTION_REFUSED`.
+El JavaScript de esa versión (publicada el 9 oct a las 14:25 UTC) tenía `127.0.0.1` y
+`stormcip-dev` y no tenía `stormcip-972bd`: se había construido con `web/.env.local`
+(desarrollo, `NEXT_PUBLIC_USE_EMULATORS=true`). Cada visitante intentaba conectarse a los
+emuladores de **su propio** computador, que no existen. No fue un cambio de código ni de
+`firestore.rules`: el login falla antes de llegar a Firestore.
+
+**Cómo se detectó.** Descargando las páginas y scripts públicos del sitio y buscando esas
+cadenas (es lo que automatiza `scripts/verificar-build-web.js`), y mirando `Last-Modified`
+(`curl -I https://stormcip-972bd.web.app/login`). El `Last-Modified` identifica qué
+despliegue está sirviendo el sitio.
+
+**Cómo se resolvió.** Consola de Firebase → Hosting → historial de versiones → "Revertir" a
+la versión anterior (la del 1 oct, 22:14 UTC, que sí contenía `stormcip-972bd`). Sirve para
+volver atrás en segundos sin reconstruir. Después hay que construir bien (sección anterior)
+antes de volver a publicar.
+
+**La caché del navegador puede seguir mostrando el error aunque el servidor ya esté bien.**
+Hosting responde con `Cache-Control: max-age=3600`: el navegador puede reusar el script viejo
+hasta una hora. Tras un despliegue o una reversión, probar con recarga forzada (Ctrl+Shift+R),
+una ventana de incógnito, "Borrar datos del sitio" (F12 → Aplicación → Almacenamiento) o
+desde otro dispositivo. Si la consola sigue nombrando el mismo archivo `.js` con
+`127.0.0.1`, es la caché; si nombra otro, es otra causa.
+
+**Al probar el login en producción** usar un usuario real de `stormcip-972bd` con rol (por
+ejemplo el creado con `seed-prod.js`). `admin@stormcip.dev` / `admin123` solo existe en el
+emulador.
+
+**Para que no se repita, antes de cada `firebase deploy --only hosting`:**
+1. Construir con `web/.env.production.local` (no con solo `.env.local`).
+2. Correr `node verificar-build-web.js` (desde `scripts/`) y no desplegar si falla.
+3. Avisar al equipo del despliegue: los usuarios pueden ver la versión anterior hasta una hora.
+4. Si algo sale mal, revertir desde el historial de versiones de Hosting (consola) en vez de
+   reconstruir con prisa.
+
 ## 4) Prueba de humo (no escribe nada en Firestore)
 
 Antes de tocar la consola de TTS, probar la función ya desplegada
