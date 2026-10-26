@@ -42,15 +42,16 @@ documento, cada ejecución contra producción requiere aprobación explícita.
 
 ## Nota: regiones de las funciones (no todas están en la misma)
 
-Tres funciones corren en `southamerica-west1` (Santiago): `ttnUplink`,
-`ingestLectura` y `setUserRole` — las tres son Cloud Functions 2ª
+Seis funciones corren en `southamerica-west1` (Santiago): `ttnUplink`,
+`ingestLectura`, `setUserRole`, `alCerrarCiclo`, `recalcularIndicadores` y
+`alCambiarEstadoProceso` — las seis son Cloud Functions 2ª
 generación. `onUserCreated` corre en `southamerica-east1` (São Paulo): es
 la única de 1ª generación (usa el trigger `auth.user().onCreate`, que no
 existe en 2ª gen), y `southamerica-west1` no admite 1ª generación. Ver el
 comentario junto a `onUserCreated` en `functions/src/auth.ts`.
 
 ⚠️ **Una función mal configurada puede tumbar el deploy de otras, aunque no
-estén nombradas en el `--only`.** Las 4 funciones viven en un solo codebase
+estén nombradas en el `--only`.** Las 7 funciones viven en un solo codebase
 (`functions/src/index.ts`); Firebase CLI carga y evalúa ese archivo completo
 para descubrir todos los triggers **antes** de aplicar el filtro `--only`
 — es decir, `--only functions:ttnUplink,functions:ingestLectura` no evita
@@ -76,6 +77,8 @@ Compararlo contra lo que existe hoy en `functions/src/index.ts`:
 | `ttnUplink` | v2 HTTP | `southamerica-west1` | Sí |
 | `ingestLectura` | v2 HTTP | `southamerica-west1` | Sí |
 | `setUserRole` | v2 callable | `southamerica-west1` | Sí |
+| `alCerrarCiclo` | v2 Firestore (`ciclos/{cicloId}`, al actualizar) | `southamerica-west1` | Sí |
+| `recalcularIndicadores` | v2 callable | `southamerica-west1` | Sí |
 | `onUserCreated` | v1 (auth trigger) | `southamerica-east1` | Sí |
 | `alCambiarEstadoProceso` | v2 Firestore (`estadoProceso/{lineaId}`) | `southamerica-west1` | Sí |
 
