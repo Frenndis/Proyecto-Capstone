@@ -56,6 +56,10 @@ export type Ciclo = {
   ultimaLectura?: Record<string, UltimaLecturaDispositivo>; // anidada por deviceId
   // Variables que cada dispositivo reportó alguna vez en el ciclo (solo crece)
   variablesVistas?: Record<string, string[]>;
+  // Litros que pasaron por la línea en cada etapa (integra el caudal de
+  // estadoProceso; lo escribe alCambiarEstadoProceso). Una etapa que aún no tuvo
+  // lecturas no tiene entrada. Es volumen circulado, no consumo.
+  volumenCirculado?: { litros: Record<string, number>; huecos?: number; simulado?: boolean };
 };
 
 // Estado de planta en vivo (estadoProceso/{lineaId}): lo que vendría del PLC.

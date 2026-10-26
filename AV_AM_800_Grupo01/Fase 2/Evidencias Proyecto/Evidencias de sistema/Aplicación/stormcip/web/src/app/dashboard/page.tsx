@@ -9,6 +9,8 @@ import {
 import { useEstadoProceso } from "@/hooks/useEstadoProceso";
 import { useHistorialPlanta } from "@/hooks/useHistorialPlanta";
 import { VARIABLES_DE_PLANTA } from "@/lib/historialPlanta";
+import VolumenCirculado from "@/components/VolumenCirculado";
+import { estadoVolumen } from "@/lib/volumenCirculado";
 import { useAhora } from "@/hooks/useAhora";
 import TarjetaSonda from "@/components/TarjetaSonda";
 import BarraEtapas from "@/components/BarraEtapas";
@@ -83,6 +85,8 @@ function Dashboard() {
       : { tipo: "normal", valor };
   const estadoCaudal = deInstrumentos(planta?.instrumentos.caudal);
   const estadoConcentracion = deInstrumentos(planta?.instrumentos.concentracion);
+  // Sin caudal informado no se muestra "0 L" sino "Sin caudal" (ver estadoVolumen)
+  const volumen = estadoVolumen(ciclo?.volumenCirculado, planta?.instrumentos.caudal, enVivo);
   // La variable elegida puede dejar de existir si cambia el equipo o el ciclo
   const graficoActual = graficables.includes(grafico) ? grafico : graficables[0];
   // Eje de tiempo de la tendencia: del inicio del ciclo a su fin, o a "ahora"
@@ -178,6 +182,8 @@ function Dashboard() {
 
         <PanelesProceso cicloId={ciclo.id} proceso={proceso} cargando={cargandoProceso}
           detenido={detenido} />
+
+        <VolumenCirculado estado={volumen} />
 
         <section className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
           <div className="mb-3 flex items-center justify-between">
