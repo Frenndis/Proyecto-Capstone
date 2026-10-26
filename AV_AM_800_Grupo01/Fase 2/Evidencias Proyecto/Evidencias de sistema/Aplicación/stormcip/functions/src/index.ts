@@ -11,3 +11,5 @@ export { ttnUplink } from "./lorawanAdapter";
 export { onUserCreated, setUserRole } from "./auth";
 // Cierre de ciclo: invoca derivarCiclo() y deja los indicadores en el documento.
 export { alCerrarCiclo, recalcularIndicadores } from "./ciclos";
+// Volumen circulado por etapa: integra el caudal de estadoProceso (ver volumenCirculado.ts).
+export { alCambiarEstadoProceso } from "./volumenCirculado";

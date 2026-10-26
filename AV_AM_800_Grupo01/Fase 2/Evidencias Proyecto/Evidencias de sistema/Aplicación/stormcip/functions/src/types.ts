@@ -7,6 +7,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import type { ResultadoQuimica } from "./concentracion";
+import type { VolumenCirculado } from "./volumenCirculado";
 
 export const ESQUEMA_VERSION = 2;
 
@@ -194,6 +195,8 @@ export type Ciclo = {
   /** Bandera de mantenimiento: dispara el recálculo y la borra el trigger. */
   recalcular?: boolean;
   consumos?: Consumos;
+  /** Litros circulados por etapa (integra el caudal de estadoProceso); lo escribe alCambiarEstadoProceso. */
+  volumenCirculado?: VolumenCirculado;
 };
 
 /**
