@@ -178,3 +178,31 @@ Si `min` no existe, imprime "—" y luego "–3000".
 El hook (`web/src/hooks/useDatosCip.ts`) lee `dispositivos/{id}` para filtrar las tarjetas por las sondas activas, y las reglas (`firestore.rules`) solo dejan leer `dispositivos` a un admin. Hoy funciona porque `/dashboard` está protegido con `GuardRol roles={["admin"]}`.
 
 **Al habilitar el rol operador**, revisar los permisos de lectura de `dispositivos`: con el mismo hook un operador recibiría `permission-denied`, el hook caería al respaldo (mostrar todo lo visto, sin filtrar por sondas) y volverían las tarjetas de configuraciones antiguas. Opciones: abrir la lectura de `dispositivos` al operador (o de un subconjunto), o resolverlo con el punto 13 (guardar topes y sondas en el ciclo), que evita leer `dispositivos` desde la web.
+
+
+---
+
+## 16. Confirmar si la sonda EC ya compensa la temperatura (`sensorYaCompensa`)
+
+**Qué pasa:** la concentración química (`functions/src/concentracion.ts`, campo `quimica` de cada lectura) compensa la EC a 25 °C con el α de cada químico (NaOH ≈ 0,019). Si la sonda ya entrega la EC compensada, se compensa **dos veces** y la concentración sale mal. Es la misma duda del punto 1, ahora también para este cálculo.
+
+**Cómo se controla:** `concentracionConfig.ts` tiene el flag `sensorYaCompensa` por modelo de sonda (`DR-ECK1.0`, `DR-ECK10.0`, `DR-EC200`), **en `false` por defecto**. Con `true`, κ25 = la EC reportada, sin aplicar la fórmula. Se puede cambiar sin redesplegar en `configuracion/calculos.concentracion.sensorYaCompensa` de Firestore.
+
+**Cómo confirmarlo:**
+- Revisar el manual de Dragino (sección 4.2.2 de la DR-ECK10.0, que dice que compensa con coeficiente 0,02 a 25 °C) y confirmar si el valor que reporta el WQS-LB es el compensado o el crudo; o
+- Prueba de laboratorio: medir **la misma muestra a dos temperaturas** (por ejemplo 25 °C y 40 °C). Si la EC reportada casi no cambia, la sonda ya compensa (`true`); si sube ~2 % por °C, entrega el valor crudo (`false`).
+
+**Decidir junto con el punto 1:** `factorCompensacionEC` de `conductividad25C` (poner 0 si la sonda compensa) y este flag deben quedar coherentes entre sí.
+
+**Además, para validar la concentración con hardware real:** la `DR-ECK1.0` comprada mide hasta 2000 µS/cm y la `DR-ECK10.0` hasta 20 000, mientras que la soda de un CIP (0,5–2 %) está en el orden de 25–100 mS/cm. Solo la `DR-EC200` (hasta 200 mS/cm) cubre ese rango, y el decoder aún no la soporta (firmware ≥ 1.3.1). Además, las sondas ECK operan hasta 60 °C y la soda va a 70–80 °C: esas lecturas quedan `saturado` o `fuera_de_operacion` y la concentración sale `null` con confianza `baja`. Los parámetros m, b y el umbral de agua son valores de ejemplo, a reemplazar por la curva real del proveedor.
+
+
+---
+
+## 17. El umbral de agua de la concentración NO es un criterio de enjuague limpio
+
+**Qué es y qué no es:** `umbralAguaMScm` (5 mS/cm, en `functions/src/concentracionConfig.ts`) solo separa fases: bajo ese valor la fase es "agua" y no se calcula concentración química. **No sirve para decidir que un enjuague quedó limpio**: 5 mS/cm son 5000 µS/cm, unas 25 veces el criterio de limpieza actual (`configuracion/calculos.criterioLimpio.conductividad25C` = 200 µS/cm). Un enjuague a 3000 µS/cm figura como fase "agua" y todavía está lejos de estar limpio.
+
+**Qué falta:** la verificación del enjuague final necesita su propio umbral, cercano a la conductividad del agua de red de la planta. Ese valor **hay que medirlo en la planta** (hoy `conductividadAguaRed` = 150 µS/cm y los 200 y 300 µS/cm de `criterioLimpio` y del umbral de `enjuague_final` son supuestos sin medir). Hasta entonces, la fase "agua" no debe usarse como señal de "enjuague terminado".
+
+**Estado:** no implementado.
