@@ -20,7 +20,7 @@ emulador junto con los flags de producción.
 |---|---|
 | `cerrar-ciclo.js`, `recalcular.js`, `rotar-key.js`, `simulador-prod.js`, `simulador-cip.js` | `--prod --project stormcip-972bd` (guardarraíles compartidos en `scripts/entorno.js`; además se niegan si encuentran `PROJECT_ID=stormcip-972bd` sin `--prod`) |
 | `seed-prod.js`, `produccion-plantilla.js` | `--project stormcip-972bd --confirmar` (solo producción; 5 s para cancelar) |
-| `seed.js`, `simulador.js`, `simulador-ttn.js` | Nunca: solo emuladores |
+| `seed.js`, `simulador.js`, `simulador-ttn.js`, `e2e-quimica.js` | Nunca: solo emuladores |
 
 Las credenciales de los scripts con Admin SDK son las de
 `gcloud auth application-default login`. Igual que los comandos de este
