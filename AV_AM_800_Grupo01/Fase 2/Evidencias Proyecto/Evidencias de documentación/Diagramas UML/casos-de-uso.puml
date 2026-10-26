@@ -1,0 +1,69 @@
+@startuml casos-de-uso
+' StormCIP · Diagrama de casos de uso
+' Fuente: historias de usuario (Plan del proyecto), firestore.rules y functions/src.
+' Para verlo: https://www.plantuml.com/plantuml o la extensión PlantUML de VS Code.
+
+left to right direction
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+
+actor "Visor\n(jefe de producción / cliente)" as Visor
+actor "Operador" as Operador
+actor "Administrador" as Admin
+actor "Sensor WQS-LB\nvía The Things Stack" as Sensor <<sistema externo>>
+
+Operador -|> Visor
+Admin -|> Operador
+
+rectangle "StormCIP" {
+  usecase "Iniciar sesión" as UC01
+  usecase "Ver variables en tiempo real" as UC02
+  usecase "Ver etapa del ciclo CIP" as UC03
+  usecase "Ver alertas e historial de alertas" as UC04
+  usecase "Ver indicadores del ciclo" as UC05
+  usecase "Ver históricos 24 h / 7 días\n<<pendiente>>" as UC06
+  usecase "Ver proyección de limpieza\n<<pendiente>>" as UC07
+
+  usecase "Reconocer alerta" as UC10
+  usecase "Gestionar ciclo\n(iniciar, cambiar etapa, finalizar)\n<<hoy por script>>" as UC11
+
+  usecase "Asignar roles\n<<sin pantalla>>" as UC20
+  usecase "Ver estado de los equipos" as UC21
+  usecase "Configurar umbrales\n<<pendiente>>" as UC22
+  usecase "Recalcular indicadores" as UC23
+  usecase "Controlar simulación de demo" as UC24
+
+  usecase "Enviar lectura" as UC30
+  usecase "Enviar estado del equipo\n(FPort 5)" as UC31
+  usecase "Decodificar payload" as UC32
+  usecase "Validar rango físico" as UC33
+  usecase "Generar alerta por umbral" as UC34
+  usecase "Calcular indicadores al\nfinalizar el ciclo" as UC35
+}
+
+Visor --> UC01
+Visor --> UC02
+Visor --> UC03
+Visor --> UC04
+Visor --> UC05
+Visor --> UC06
+Visor --> UC07
+
+Operador --> UC10
+Operador --> UC11
+
+Admin --> UC20
+Admin --> UC21
+Admin --> UC22
+Admin --> UC23
+Admin --> UC24
+
+Sensor --> UC30
+Sensor --> UC31
+
+UC30 ..> UC32 : <<include>>
+UC30 ..> UC33 : <<include>>
+UC34 ..> UC30 : <<extend>>\n(valor fuera de umbral)
+UC35 ..> UC11 : <<extend>>\n(al finalizar)
+UC31 ..> UC32 : <<include>>
+@enduml
