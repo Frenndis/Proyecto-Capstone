@@ -6,6 +6,8 @@
 // Rangos físicos: datasheet/manual Dragino WQS.
 // ─────────────────────────────────────────────────────────────
 
+import type { ResultadoQuimica } from "./concentracion";
+
 export const ESQUEMA_VERSION = 2;
 
 // ── Variables MEDIDAS (vienen de un sensor real) ──────────────
@@ -150,6 +152,10 @@ export type Lectura = {
   metodo?: Partial<Record<Derivado, string>>;
   // Por variable medida y por derivado (antes solo derivados)
   confianza?: Partial<Record<Variable | Derivado, Confianza>>;
+  // Concentración química inferida de la EC (concentracion.ts): fase, κ25 y %,
+  // con su confianza y el motivo si no se pudo calcular. Campo aparte de
+  // `derivados` porque admite null y no es un indicador del ciclo.
+  quimica?: ResultadoQuimica;
 };
 
 /** Último dato de un dispositivo en el ciclo (ciclos/{id}.ultimaLectura.{deviceId}). */
@@ -160,6 +166,7 @@ export type UltimaLectura = {
   confianza: Partial<Record<Variable | Derivado, Confianza>>;
   /** Variable → motivo: lo que llegó en esta lectura pero no se guardó. */
   descartadas: Record<string, string>;
+  quimica?: ResultadoQuimica;
 };
 
 export type Ciclo = {

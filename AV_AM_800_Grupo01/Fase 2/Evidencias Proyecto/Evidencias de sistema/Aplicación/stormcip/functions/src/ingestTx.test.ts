@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DocumentReference, FieldPath, Timestamp } from "firebase-admin/firestore";
 import { DatosIngesta, TxIngesta, transaccionIngesta } from "./ingest";
 import { Sonda } from "./types";
+import { calcularQuimica } from "./concentracion";
 
 // ── Transacción simulada: documentos en memoria y registro de escrituras ──
 type Doc = Record<string, any>;
@@ -123,5 +124,47 @@ describe("transaccionIngesta — la etapa sale del ciclo leído dentro de la tra
     });
     expect(await transaccionIngesta(tx, datos())).toEqual({ ok: true, etapa: "enjuague", duplicado: true });
     expect(escrituras).toEqual([]);
+  });
+});
+
+describe("transaccionIngesta — concentración química (quimica)", () => {
+  // Con los parámetros de ejemplo, κ25 = 50 000 µS/cm equivale a 1,0 % de NaOH
+  const conQuimica = (): DatosIngesta => ({
+    ...datos(),
+    limpios: { conductividad: 59500, tempEc: 35 },
+    numericos: { conductividad: 59500, tempEc: 35 },
+    quimicaPara: (etapa) => calcularQuimica({
+      etapa, valores: { conductividad: 59500, tempEc: 35 },
+    }),
+  });
+
+  it("se calcula con la etapa del ciclo y se guarda en la lectura y en ultimaLectura", async () => {
+    const { tx, escrituras } = crearTx({ [CICLO]: { etapaActual: "alcalino" } });
+    await transaccionIngesta(tx, conQuimica());
+
+    const lectura = escrituras.find((e) => e.path === `${CICLO}/lecturas/L1`);
+    expect(lectura?.data?.quimica).toMatchObject({
+      fase: "soda", quimico: "NaOH", kappa25: 50000, concentracionQuimica: 1, confianza: "estimado",
+    });
+    // Lo crudo sigue guardado tal cual en `valores`
+    expect(lectura?.data?.valores).toEqual({ conductividad: 59500, tempEc: 35 });
+
+    const ultima = escrituras.find((e) => e.path === CICLO)?.args
+      ?.find((a) => typeof a === "object" && a !== null && "descartadas" in a) as Doc | undefined;
+    expect(ultima?.quimica).toMatchObject({ fase: "soda", concentracionQuimica: 1 });
+  });
+
+  it("en una etapa sin químico queda la fase agua y concentración null", async () => {
+    const { tx, escrituras } = crearTx({ [CICLO]: { etapaActual: "enjuague" } });
+    await transaccionIngesta(tx, conQuimica());
+    const lectura = escrituras.find((e) => e.path === `${CICLO}/lecturas/L1`);
+    expect(lectura?.data?.quimica).toMatchObject({ fase: "agua", concentracionQuimica: null });
+  });
+
+  it("sin quimicaPara la lectura no lleva el campo (compatibilidad)", async () => {
+    const { tx, escrituras } = crearTx({ [CICLO]: { etapaActual: "alcalino" } });
+    await transaccionIngesta(tx, datos());
+    const lectura = escrituras.find((e) => e.path === `${CICLO}/lecturas/L1`);
+    expect(lectura?.data).not.toHaveProperty("quimica");
   });
 });

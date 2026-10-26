@@ -9,6 +9,8 @@ import {
   Dispositivo, Sonda, fueraDeRango, sondaDe, specDe,
 } from "./types";
 import { derivarLectura } from "./calculos";
+import { ResultadoQuimica, calcularQuimica } from "./concentracion";
+import { configConcentracion } from "./concentracionConfig";
 
 // null = "sensor no conectado" (centinela del DS18B20 externo, ver wqsDecoder):
 // se guarda tal cual y se salta su validación de rango.
@@ -309,6 +311,12 @@ export type DatosIngesta = {
   umbrales: Umbrales;
   sondas?: Record<string, Sonda>;
   extra?: Record<string, unknown>;
+  /**
+   * Concentración química para la etapa dada. Es función de la etapa porque el
+   * químico (soda / ácido / ninguno) depende de ella, y la etapa solo se conoce
+   * dentro de la transacción. Opcional: sin ella la lectura no lleva `quimica`.
+   */
+  quimicaPara?: (etapa: Etapa) => ResultadoQuimica;
 };
 
 export type ResultadoTx =
@@ -357,9 +365,11 @@ export async function transaccionIngesta(tx: TxIngesta, d: DatosIngesta): Promis
   );
   if (plan.duplicado) return { ok: true, etapa, duplicado: true };
 
+  const quimica = d.quimicaPara?.(etapa as Etapa);
   tx.set(d.lecturaRef, {
     v: ESQUEMA_VERSION, ts: d.ts, etapa, deviceId: d.deviceId,
     valores: d.limpios, derivados: d.derivados, metodo: d.metodo, confianza: d.confianza,
+    ...(quimica ? { quimica } : {}),
     ...d.extra,
   });
 
@@ -370,6 +380,7 @@ export async function transaccionIngesta(tx: TxIngesta, d: DatosIngesta): Promis
   const ultima: UltimaLectura = {
     ts: d.ts, valores: d.limpios, derivados: d.derivados, confianza: d.confianza,
     descartadas: d.descartadas,
+    ...(quimica ? { quimica } : {}),
   };
   tx.update(
     d.cicloRef,
@@ -453,6 +464,16 @@ export async function procesarLectura(opts: {
   const { derivados, metodo } = derivacion;
   const confianza = { ...validacion.confianza, ...derivacion.confianza };
 
+  // 3b. Concentración química (concentracion.ts): depende de la etapa, que solo
+  // se conoce dentro de la transacción. Parámetros: concentracionConfig.ts,
+  // sobreescribibles en configuracion/calculos.concentracion.
+  const cfgQuimica = configConcentracion((cfgC.data() ?? {}).concentracion);
+  const modeloEc = sondaDe("conductividad", dispositivo.sondas)?.modelo;
+  const quimicaPara = (etapa: Etapa) => calcularQuimica({
+    etapa, valores: numericos, confianza: validacion.confianza,
+    modeloSonda: modeloEc, config: cfgQuimica,
+  });
+
   // El ID se fija fuera de la transacción: si Firestore la reintenta por
   // contención, el reintento escribe el mismo documento y no uno nuevo.
   const cicloRef = db.doc(`ciclos/${cicloId}`);
@@ -468,7 +489,7 @@ export async function procesarLectura(opts: {
     refAlerta: (id) => db.doc(`alertas/${id}`),
     limpios, numericos, derivados, metodo, confianza, descartadas,
     vistas: variablesVistasDe(limpios, derivados, descartadas, dispositivo.sondas),
-    umbrales, sondas: dispositivo.sondas, extra,
+    umbrales, sondas: dispositivo.sondas, extra, quimicaPara,
   }));
 
   if (!r.ok) return r;
