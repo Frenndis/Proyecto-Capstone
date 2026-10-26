@@ -20,7 +20,7 @@ emulador junto con los flags de producción.
 |---|---|
 | `cerrar-ciclo.js`, `recalcular.js`, `rotar-key.js`, `simulador-prod.js`, `simulador-cip.js` | `--prod --project stormcip-972bd` (guardarraíles compartidos en `scripts/entorno.js`; además se niegan si encuentran `PROJECT_ID=stormcip-972bd` sin `--prod`) |
 | `seed-prod.js`, `produccion-plantilla.js` | `--project stormcip-972bd --confirmar` (solo producción; 5 s para cancelar) |
-| `seed.js`, `simulador.js`, `simulador-ttn.js`, `e2e-quimica.js` | Nunca: solo emuladores |
+| `seed.js`, `simulador.js`, `simulador-ttn.js`, `e2e-quimica.js`, `e2e-volumen.js` | Nunca: solo emuladores |
 
 Las credenciales de los scripts con Admin SDK son las de
 `gcloud auth application-default login`. Igual que los comandos de este
@@ -77,6 +77,7 @@ Compararlo contra lo que existe hoy en `functions/src/index.ts`:
 | `ingestLectura` | v2 HTTP | `southamerica-west1` | Sí |
 | `setUserRole` | v2 callable | `southamerica-west1` | Sí |
 | `onUserCreated` | v1 (auth trigger) | `southamerica-east1` | Sí |
+| `alCambiarEstadoProceso` | v2 Firestore (`estadoProceso/{lineaId}`) | `southamerica-west1` | Sí |
 
 Si en el output de `functions:list` aparecen funciones de otros compañeros
 que no están en este listado (por ejemplo, algo de otra rama que ya se
@@ -125,18 +126,53 @@ paso se aprueba por separado y **no se cambia el orden**:
    valor va **entre comillas** (sin ellas la coma lo parte):
 
    ```
-   firebase deploy --project stormcip-972bd --only "functions:ttnUplink,functions:ingestLectura,functions:alCerrarCiclo,functions:recalcularIndicadores"
+   firebase deploy --project stormcip-972bd --only "functions:ttnUplink,functions:ingestLectura,functions:alCerrarCiclo,functions:recalcularIndicadores,functions:alCambiarEstadoProceso"
    ```
 
    El `predeploy` compila `functions/` (`npm run build`). Las funciones nuevas
    escriben campos que el dashboard nuevo muestra (`confianza`, `descartadas`,
    `variablesVistas`), por eso van antes que Hosting.
 
-3. **Hosting** (dashboard), con el build de producción de la sección siguiente.
+   `alCambiarEstadoProceso` integra el caudal de `estadoProceso` y escribe
+   `ciclos/{id}.volumenCirculado` (lo que muestra la sección "Volumen circulado" del
+   dashboard) y un marcador por evento en `ciclos/{id}/eventosVolumen/{eventId}`
+   para no contar dos veces un evento duplicado. Esos marcadores vencen a los 30 días
+   (campo `expiraEn`), pero solo se borran con la política TTL del paso siguiente.
+
+3. **Política TTL de los marcadores de eventos** (una sola vez; puede hacerse antes
+   o después de desplegar la función). Sin ella los documentos de `eventosVolumen`
+   se acumulan para siempre. La política se crea sobre el campo `expiraEn` del
+   grupo de colecciones `eventosVolumen`:
+
+   ```
+   gcloud firestore fields ttls update expiraEn --collection-group=eventosVolumen --enable-ttl --project=stormcip-972bd
+   ```
+
+   Se necesita un rol que permita editar índices de Firestore (por ejemplo, Cloud
+   Datastore Index Admin). La operación es asíncrona y los documentos vencidos se
+   borran dentro de las 24 horas siguientes al vencimiento, no al instante. Para
+   comprobar que quedó activa:
+
+   ```
+   gcloud firestore fields ttls list --project=stormcip-972bd
+   ```
+
+   Los emuladores no aplican TTL: ahí los marcadores no se borran.
+
+4. **Hosting** (dashboard), con el build de producción de la sección siguiente.
 
    ```
    firebase deploy --project stormcip-972bd --only hosting
    ```
+
+### Nota: duración de la demo y volumen circulado
+
+La demo debe durar **~5 min o más** (el valor por defecto de `simulador-cip.js`). El
+volumen circulado no cuenta el intervalo entre la última lectura de una etapa y la
+primera de la siguiente, y esa pérdida es casi fija por etapa: con el ciclo de 300 s
+el total queda ~2 % bajo el volumen exacto (1395,6 L de 1425 L), pero con ciclos de
+60 s (`--duracion 60`), donde cada etapa dura apenas unos segundos, la pérdida sube a
+~13 % (195,1 L de 225 L). Los ciclos cortos sirven para probar, no para mostrar cifras.
 
 ### Configuración de Firestore que el código nuevo espera (antes del paso 2)
 
