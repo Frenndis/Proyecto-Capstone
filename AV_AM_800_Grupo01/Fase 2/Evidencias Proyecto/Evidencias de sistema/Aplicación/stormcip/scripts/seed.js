@@ -84,7 +84,14 @@ const db = admin.firestore();
   await db.doc("configuracion/umbrales").set({
     preenjuague: enjuagueInicial,
     // Etapas químicas: fuera del alcance de monitoreo (las sondas trabajan fuera
-    // de su rango físico ahí). Se dejan sin umbrales a propósito.
+    // de su rango físico ahí). Se dejan sin umbrales de sonda a propósito.
+    //
+    // Excepción: la concentración de soda del lavado alcalino. Se dosifica y debe
+    // mantenerse estable; viene del PLC (estadoProceso.instrumentos), no de una
+    // sonda, así que el dashboard la compara con este rango y el backend no genera
+    // alerta con ella. 1,5–2 % es el rango del simulador (modeloCip.ts, nominal
+    // 1,8 %). ⚠ Provisional: confirmar con el cliente.
+    alcalino: { concentracion: { min: 1.5, max: 2 } },
     enjuague: enjuagueInicial,
     enjuague_final: enjuagueLimpio,
   });

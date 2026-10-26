@@ -57,13 +57,7 @@ export default function PanelesProceso({
           Sin estado de planta para este ciclo. Lo escribe el PLC o, en la demo, el simulador.
         </p>
       ) : (
-        <div className={`grid gap-3 md:grid-cols-3 ${detenido ? "opacity-50" : ""}`}>
-          <Panel titulo="Instrumentos">
-            <Dato etiqueta="Temp. de ida" valor={formatear("tempProceso", p.instrumentos.tempIda)} unidad="°C" />
-            <Dato etiqueta="Concentración" valor={formatear("concentracion", p.instrumentos.concentracion)} unidad="%" />
-            <Dato etiqueta="Caudal" valor={formatear("caudal", p.instrumentos.caudal)} unidad="m³/h" />
-            <Dato etiqueta="Presión" valor={formatear("presion", p.instrumentos.presion)} unidad="bar" />
-          </Panel>
+        <div className={`grid gap-3 md:grid-cols-2 ${detenido ? "opacity-50" : ""}`}>
           <Panel titulo="Estanques">
             <Dato etiqueta="Soda" valor={`${formatear("nivel", p.estanques.soda.nivel)} %`}
               unidad={`${formatear("tempProceso", p.estanques.soda.temp)} °C`} />

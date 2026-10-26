@@ -5,6 +5,7 @@ import {
 } from "recharts";
 import { ETAPAS_MONITOREADAS, ETAPA_LABEL, Lectura, META, Rango, formatear } from "@/lib/tipos";
 import { PuntoSerie, construirSerie, franjasPorEtapa } from "@/lib/serieTendencia";
+import { VARIABLES_DE_PLANTA } from "@/lib/historialPlanta";
 
 const hora = (ms: number) =>
   new Date(ms).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
@@ -44,7 +45,11 @@ export default function GraficoTendencia({
 }) {
   // Por defecto solo las etapas monitoreadas: en las químicas la sonda satura o
   // opera fuera de su rango y aplasta la escala de la curva del enjuague.
-  const [soloMonitoreadas, setSoloMonitoreadas] = useState(true);
+  const [filtroMonitoreadas, setSoloMonitoreadas] = useState(true);
+  // La concentración de la solución importa justo en las etapas químicas (el
+  // lavado alcalino se dosifica y debe mantenerse estable): sin filtro y sin interruptor.
+  const deQuimico = VARIABLES_DE_PLANTA.includes(variable);
+  const soloMonitoreadas = filtroMonitoreadas && !deQuimico;
 
   // valorDe (dentro de construirSerie) busca primero en `valores` y luego en
   // `derivados`: el mismo gráfico sirve para conductividad y conductividad25C.
@@ -67,7 +72,7 @@ export default function GraficoTendencia({
   const unidad = META[variable]?.unidad ?? "";
   const hayExtremos = serie.puntos.some((p) => p.confianza === "saturado" || p.confianza === "fuera_de_operacion");
 
-  const interruptor = (
+  const interruptor = deQuimico ? null : (
     <label className="mb-2 flex cursor-pointer items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
       <input type="checkbox" checked={soloMonitoreadas}
         onChange={(e) => setSoloMonitoreadas(e.target.checked)} />

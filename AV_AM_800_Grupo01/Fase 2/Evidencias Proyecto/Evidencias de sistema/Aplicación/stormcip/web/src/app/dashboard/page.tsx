@@ -7,6 +7,8 @@ import {
   useUmbrales, ultimaLecturaReciente,
 } from "@/hooks/useDatosCip";
 import { useEstadoProceso } from "@/hooks/useEstadoProceso";
+import { useHistorialPlanta } from "@/hooks/useHistorialPlanta";
+import { VARIABLES_DE_PLANTA } from "@/lib/historialPlanta";
 import { useAhora } from "@/hooks/useAhora";
 import TarjetaSonda from "@/components/TarjetaSonda";
 import BarraEtapas from "@/components/BarraEtapas";
@@ -20,12 +22,21 @@ import HistorialAlertas from "@/components/HistorialAlertas";
 import IndicadoresCiclo from "@/components/IndicadoresCiclo";
 import { ETAPAS_MONITOREADAS, ETAPA_LABEL, META } from "@/lib/tipos";
 import { estadoTarjeta, variablesAMostrar } from "@/lib/tarjetas";
+import { procesoDelCiclo } from "@/lib/etapas";
+import type { EstadoTarjeta } from "@/lib/tarjetas";
+
+// Variables que siguen existiendo (backend, alertas, tendencia) pero no tienen
+// tarjeta: conductividad25C es un cálculo y tempEc duplica la temperatura de la
+// sonda de pH, que es la que se muestra.
+const SIN_TARJETA = ["conductividad25C", "tempEc"];
 
 // Las tarjetas salen de variablesVistas y de las sondas del equipo (ver
 // variablesAMostrar), no de una lista fija. conductividad25C va primero porque
 // es el indicador real de "agua limpia": sin compensar por temperatura, dos
 // lecturas no son comparables entre sí.
-const GRAFICABLES = ["conductividad25C", "conductividad", "turbidez", "ph", "tempEc"];
+// concentracion no es una sonda sino del estado de planta: se grafica con el
+// historial que acumula useHistorialPlanta (ver VARIABLES_DE_PLANTA).
+const GRAFICABLES = ["conductividad25C", "conductividad", "turbidez", "ph", "concentracion", "tempEc"];
 
 // Por ahora solo admin. Cuando se definan los permisos de operador, se agrega
 // aquí y se limitan las funciones dentro del dashboard según `rol`.
@@ -52,6 +63,7 @@ function Dashboard() {
   const deviceId = reciente.deviceId ?? Object.keys(ciclo?.variablesVistas ?? {})[0];
   const { sondas, cargando: cargandoSondas } = useSondasDispositivo(deviceId);
   const { estado: proceso, cargando: cargandoProceso, detenido } = useEstadoProceso(ciclo?.lineaId);
+  const historialPlanta = useHistorialPlanta(ciclo?.id, proceso);
   const ahora = useAhora();
 
   // GuardRol ya garantiza sesión y rol antes de montar este componente.
@@ -61,7 +73,16 @@ function Dashboard() {
   const rangos = umbrales[etapa] ?? {};
   const lectura = reciente.lectura;
   const variables = variablesAMostrar(deviceId ? ciclo?.variablesVistas?.[deviceId] : undefined, sondas);
-  const graficables = GRAFICABLES.filter((v) => variables.includes(v));
+  const tarjetas = variables.filter((v) => !SIN_TARJETA.includes(v));
+  const graficables = GRAFICABLES.filter((v) => variables.includes(v) || VARIABLES_DE_PLANTA.includes(v));
+  // Caudal y concentración no salen de las sondas sino del estado de planta (PLC o simulador)
+  const planta = procesoDelCiclo(proceso, ciclo?.id ?? "");
+  const deInstrumentos = (valor?: number): EstadoTarjeta =>
+    valor === undefined
+      ? { tipo: "sin_dato", motivo: "sin estado de planta" }
+      : { tipo: "normal", valor };
+  const estadoCaudal = deInstrumentos(planta?.instrumentos.caudal);
+  const estadoConcentracion = deInstrumentos(planta?.instrumentos.concentracion);
   // La variable elegida puede dejar de existir si cambia el equipo o el ciclo
   const graficoActual = graficables.includes(grafico) ? grafico : graficables[0];
   // Eje de tiempo de la tendencia: del inicio del ciclo a su fin, o a "ahora"
@@ -140,12 +161,19 @@ function Dashboard() {
 
         <section className="grid grid-cols-2 gap-3 md:grid-cols-3">
           {cargandoSondas ? <p className="col-span-full text-sm text-slate-500">Leyendo equipo…</p>
-           : variables.length === 0 ? <p className="col-span-full rounded-lg border border-dashed p-4 text-sm text-slate-500">
-                El equipo aún no reporta variables en este ciclo.</p>
-           : variables.map((v) => (
-              <TarjetaSonda key={v} variable={v} rango={rangos[v]}
-                estado={estadoTarjeta(v, lectura, sondas)} />
-            ))}
+           : <>
+              {variables.length === 0 && (
+                <p className="col-span-full rounded-lg border border-dashed p-4 text-sm text-slate-500">
+                  El equipo aún no reporta variables en este ciclo.</p>
+              )}
+              {tarjetas.map((v) => (
+                <TarjetaSonda key={v} variable={v} rango={rangos[v]}
+                  estado={estadoTarjeta(v, lectura, sondas)} />
+              ))}
+              <TarjetaSonda variable="caudal" estado={estadoCaudal} />
+              <TarjetaSonda variable="concentracion" rango={rangos.concentracion}
+                estado={estadoConcentracion} />
+            </>}
         </section>
 
         <PanelesProceso cicloId={ciclo.id} proceso={proceso} cargando={cargandoProceso}
@@ -160,7 +188,9 @@ function Dashboard() {
             </select>
           </div>
           {graficoActual
-            ? <GraficoTendencia lecturas={lecturas} variable={graficoActual} rango={rangos[graficoActual]}
+            ? <GraficoTendencia
+                lecturas={VARIABLES_DE_PLANTA.includes(graficoActual) ? historialPlanta : lecturas}
+                variable={graficoActual} rango={rangos[graficoActual]}
                 inicioMs={inicioMs} finMs={finMs} etapaActual={etapa} />
             : <p className="text-sm text-slate-500">Sin variables graficables todavía.</p>}
           <p className="mt-2 text-xs text-slate-500">
