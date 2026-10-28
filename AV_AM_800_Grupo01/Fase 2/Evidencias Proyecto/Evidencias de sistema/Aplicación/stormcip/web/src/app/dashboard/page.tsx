@@ -86,7 +86,7 @@ function Dashboard() {
   const estadoCaudal = deInstrumentos(planta?.instrumentos.caudal);
   const estadoConcentracion = deInstrumentos(planta?.instrumentos.concentracion);
   // Sin caudal informado no se muestra "0 L" sino "Sin caudal" (ver estadoVolumen)
-  const volumen = estadoVolumen(ciclo?.volumenCirculado, planta?.instrumentos.caudal, enVivo);
+  const volumen = estadoVolumen(ciclo, planta?.instrumentos.caudal, enVivo);
   // La variable elegida puede dejar de existir si cambia el equipo o el ciclo
   const graficoActual = graficables.includes(grafico) ? grafico : graficables[0];
   // Eje de tiempo de la tendencia: del inicio del ciclo a su fin, o a "ahora"
