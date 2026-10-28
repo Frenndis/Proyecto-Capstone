@@ -20,9 +20,13 @@
  * umbral de 300) a mitad de la etapa. En un ciclo real sí habría alertas
  * al inicio de cada enjuague por arrastre químico (ver modelo-datos-sensores.md).
  *
- * Escenario "falla": en el enjuague final la conductividad se estanca sobre el
- * umbral (como con agua de red contaminada o una válvula de químico con fuga):
- * se disparan alertas y no se alcanza criterioLimpio.
+ * Escenario "falla": en el enjuague final la conductividad se estanca (como con
+ * agua de red contaminada o una válvula de químico con fuga) y no se alcanza
+ * criterioLimpio. Eso no alerta por sí solo: las alertas ya no evalúan
+ * conductividad25C (ver seed.js). Lo que sí alerta son 4 o 5 fallas aleatorias
+ * por ciclo (fallasDelCiclo): pH, conductividad (lectura general, no la de
+ * 25 °C) y temperatura fuera de rango, y saturación de la sonda de
+ * conductividad, en las etapas monitoreadas.
  *
  * Sondas: las del equipo comprado, DR-PH01 y DR-ECK1.0 (0–2000 µS/cm), sin
  * turbidez ni DS18B20. En los enjuagues la conductividad CRUDA queda bajo 2000;
@@ -251,6 +255,69 @@ function calidadEtapa(
   }
 }
 
+// ── Fallas aleatorias (solo escenario "falla") ─────────────────
+// Cada ciclo en "falla" sufre 4 o 5 fallas distintas, elegidas por la semilla
+// (el simulador usa una semilla nueva por ciclo). Cada una fuerza una variable
+// de la sonda durante una ventana que cubre al menos un uplink, para que el
+// backend la detecte con los umbrales de seed.js (pH) o como saturación.
+type FallaTipo = {
+  id: string; etapa: Etapa; descripcion: string;
+  ph?: number;             // pH al que se fuerza la sonda
+  conductividad?: number;  // µS/cm CRUDOS a los que se fuerza (sobre 2000 satura la DR-ECK1.0)
+  temp?: number;           // °C a los que se fuerzan las dos sondas (tempSonda y tempEc)
+};
+
+// Umbrales de seed.js que cruza cada una: pH 5–11 (preenjuague, enjuague) y
+// 6–8,5 (enjuague final); conductividad cruda ≤1500 (preenjuague, enjuague) y
+// ≤400 (enjuague final); temperatura ≤40 °C (preenjuague) y ≤45 °C (enjuague final).
+const CATALOGO_FALLAS: FallaTipo[] = [
+  { id: "ph_acido_preenjuague",     etapa: "preenjuague",    ph: 4.2,  descripcion: "pH ácido en el preenjuague (producto ácido en el retorno)" },
+  { id: "ph_acido_enjuague",        etapa: "enjuague",       ph: 4.3,  descripcion: "pH ácido en el enjuague (químico equivocado)" },
+  { id: "ph_alcalino_enjuague",     etapa: "enjuague",       ph: 11.8, descripcion: "pH muy alcalino en el enjuague (soda sin evacuar)" },
+  { id: "ph_acido_enjuague_final",  etapa: "enjuague_final", ph: 4.8,  descripcion: "pH ácido en el enjuague final (ácido mal enjuagado)" },
+  { id: "ph_alcalino_enjuague_final", etapa: "enjuague_final", ph: 9.6, descripcion: "pH alcalino en el enjuague final (fuga de soda)" },
+  { id: "ec_alta_preenjuague",      etapa: "preenjuague",    conductividad: 1750, descripcion: "conductividad alta en el preenjuague (exceso de residuo de producto)" },
+  { id: "ec_alta_enjuague",         etapa: "enjuague",       conductividad: 1800, descripcion: "conductividad alta en el enjuague (soda sin evacuar)" },
+  { id: "ec_alta_enjuague_final",   etapa: "enjuague_final", conductividad: 650,  descripcion: "conductividad alta en el enjuague final (agua contaminada)" },
+  { id: "ec_saturada_enjuague_final", etapa: "enjuague_final", conductividad: 2300, descripcion: "conductividad sobre el tope de la sonda en el enjuague final" },
+  { id: "temp_alta_preenjuague",    etapa: "preenjuague",    temp: 55,  descripcion: "temperatura alta en el preenjuague (agua recuperada sobrecalentada)" },
+  { id: "temp_alta_enjuague_final", etapa: "enjuague_final", temp: 56,  descripcion: "temperatura alta en el enjuague final (agua caliente por válvula abierta)" },
+];
+
+export type Falla = FallaTipo & {
+  /** Segundos desde el inicio de la ETAPA donde se centra la ventana. */
+  centroS: number;
+  /** Semiancho de la ventana (s), sin contar la rampa de 2 s de cada borde. */
+  mitadS: number;
+};
+
+/** Fallas del ciclo para una semilla: deterministas, y distintas entre sí. */
+export function fallasDelCiclo(semilla: number, receta: Receta): Falla[] {
+  const orden = CATALOGO_FALLAS
+    .map((f, i) => ({ f, clave: aleatorio(semilla, 30 + i, 0) }))
+    .sort((a, b) => a.clave - b.clave);
+  const cantidad = 4 + Math.floor(aleatorio(semilla, 40, 0) * 2);   // 4 o 5
+  const out: Falla[] = [];
+  for (const { f } of orden) {
+    if (out.length === cantidad) break;
+    const i = CATALOGO_FALLAS.indexOf(f);
+    const paso = receta.find((p) => p.etapa === f.etapa);
+    if (!paso) continue;
+    // Uplinks de la etapa: cada 10 s desde el segundo 5 (ver instantesUplink)
+    const uplinks: number[] = [];
+    for (let tE = 5; tE < paso.duracionS; tE += 10) uplinks.push(tE);
+    if (uplinks.length === 0) continue;
+    const uplink = uplinks[Math.floor(aleatorio(semilla, 50 + i, 0) * uplinks.length)];
+    const dosUplinks = aleatorio(semilla, 60 + i, 0) < 0.5 && uplink + 10 < paso.duracionS;
+    out.push({ ...f, centroS: uplink + (dosUplinks ? 5 : 0), mitadS: dosUplinks ? 9 : 4 });
+  }
+  return out;
+}
+
+/** Peso 0..1 de una falla en (etapa, tE): 1 dentro de la ventana, rampa de 2 s en los bordes. */
+const pesoFalla = (f: Falla, etapa: Etapa, tE: number) =>
+  etapa !== f.etapa ? 0 : Math.max(0, Math.min(1, (f.mitadS - Math.abs(tE - f.centroS)) / 2));
+
 // ── Estado en t ────────────────────────────────────────────────
 export type ParamsModelo = Pick<ParamsCalculo, "conductividadAguaRed" | "factorCompensacionEC" | "caudalNominalM3h"> & {
   semilla: number;
@@ -374,7 +441,18 @@ export function estadoEn(
   const ec25 = calidad.ec25 * (1 + ruido(s, 4, tc, 0.015));
   const tempEc = tempRetorno + ruido(s, 5, tc, 0.2);
   // Conductividad cruda: inversa de la compensación de calculos.ts
-  const conductividad = ec25 * (1 + params.factorCompensacionEC * (tempEc - 25));
+  let conductividad = ec25 * (1 + params.factorCompensacionEC * (tempEc - 25));
+  let phSonda = calidad.ph;
+  let tempFalla: number | null = null;   // °C forzados en ambas sondas
+  if (escenario === "falla") {
+    for (const f of fallasDelCiclo(s, receta)) {
+      const w = pesoFalla(f, etapa, tE);
+      if (w === 0) continue;
+      if (f.ph !== undefined) phSonda += (f.ph - phSonda) * w;
+      if (f.conductividad !== undefined) conductividad += (Math.max(conductividad, f.conductividad) - conductividad) * w;
+      if (f.temp !== undefined) tempFalla = (tempFalla ?? tempEc) + (f.temp - (tempFalla ?? tempEc)) * w;
+    }
+  }
 
   return {
     etapaInicioS: actual.inicioS,
@@ -415,10 +493,10 @@ export function estadoEn(
       },
     },
     sondas: {
-      ph: Math.max(0, Math.min(14, calidad.ph + ruido(s, 10, tc, 0.03))),
-      tempSonda: tempRetorno - 0.3 + ruido(s, 12, tc, 0.2),
+      ph: Math.max(0, Math.min(14, phSonda + ruido(s, 10, tc, 0.03))),
+      tempSonda: tempFalla !== null ? tempFalla - 0.3 + ruido(s, 12, tc, 0.2) : tempRetorno - 0.3 + ruido(s, 12, tc, 0.2),
       conductividad: Math.max(0, conductividad),
-      tempEc,
+      tempEc: tempFalla ?? tempEc,
     },
     consumos: {
       aguaTotal: redondear(litros.red / 1000, 3),

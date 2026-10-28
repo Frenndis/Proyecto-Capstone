@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  RECETA_DEFECTO, datosUplinkWqs, duracionReceta, escalarReceta, estadoEn, etapaEn,
-  instantesUplink, Escenario, Receta,
+  RECETA_DEFECTO, PARAMS_MODELO_DEFECTO, datosUplinkWqs, duracionReceta, escalarReceta, estadoEn, etapaEn,
+  fallasDelCiclo, instantesUplink, Escenario, Receta,
 } from "./modeloCip";
 import { encodeWqsFPort2 } from "../wqsEncoder";
 import { decodeWqs } from "../wqsDecoder";
@@ -15,10 +15,15 @@ const SONDAS_SEED: Record<string, Sonda> = {
   s1: { sondaId: "s1", modelo: "DR-PH01",   activa: true },
   s2: { sondaId: "s2", modelo: "DR-ECK1.0", activa: true },
 };
-const INICIAL = { ph: { min: 5, max: 11 }, conductividad25C: { max: 1500 } };
-const LIMPIO = { ph: { min: 6, max: 8.5 }, conductividad25C: { max: 300 } };
+// Sin umbral de conductividad25C: las alertas comparan la conductividad general (cruda)
+const INICIAL = { ph: { min: 5, max: 11 }, conductividad: { max: 1500 } };
+const LIMPIO = {
+  ph: { min: 6, max: 8.5 }, conductividad: { max: 400 },
+  tempSonda: { max: 45 }, tempEc: { max: 45 },
+};
 const UMBRALES_SEED: Record<string, Record<string, { min?: number; max?: number }>> = {
-  preenjuague: INICIAL, enjuague: INICIAL, enjuague_final: LIMPIO,
+  preenjuague: { ...INICIAL, tempSonda: { max: 40 }, tempEc: { max: 40 } },
+  enjuague: INICIAL, enjuague_final: LIMPIO,
 };
 
 /**
@@ -186,13 +191,12 @@ describe("estadoEn — sondas por el camino real del backend", () => {
   // compensado) tiene que quedar bajo ese tope, o el escenario normal tendría
   // alertas de saturación
   it("en las etapas monitoreadas la conductividad cruda queda bajo el tope de la DR-ECK1.0", () => {
-    for (const e of ["normal", "falla"] as const) {
-      for (const t of instantesUplink(RECETA_DEFECTO)) {
-        if (!ETAPAS_MONITOREADAS.includes(etapaEn(t, RECETA_DEFECTO).etapa)) continue;
-        const l = lecturaComoBackend(t, RECETA_DEFECTO, e);
-        expect(l.crudo).toBeLessThan(1900);   // margen sobre el tope de 2000
-        expect(l.confianza.conductividad).toBe("medido");
-      }
+    // Solo "normal": en "falla" una de las fallas aleatorias satura la sonda a propósito
+    for (const t of instantesUplink(RECETA_DEFECTO)) {
+      if (!ETAPAS_MONITOREADAS.includes(etapaEn(t, RECETA_DEFECTO).etapa)) continue;
+      const l = lecturaComoBackend(t, RECETA_DEFECTO, "normal");
+      expect(l.crudo).toBeLessThan(1900);   // margen sobre el tope de 2000
+      expect(l.confianza.conductividad).toBe("medido");
     }
   });
 
@@ -224,13 +228,80 @@ describe("estadoEn — sondas por el camino real del backend", () => {
     expect(ec[ec.length - 1]).toBeLessThan(PARAMS_DEFECTO.conductividadAguaRed * 1.5);
   });
 
-  it("escenario falla: la conductividad no baja y se disparan alertas en el enjuague final", () => {
-    const alertas = alertasDe("falla");
-    expect(alertas.length).toBeGreaterThan(0);
-    expect(alertas.every((a) => a.startsWith("enjuague_final/conductividad25C"))).toBe(true);
+  it("escenario falla: la conductividad no baja y no se alcanza criterioLimpio", () => {
     const u = instantesUplink(RECETA_DEFECTO).filter((t) => etapaEn(t, RECETA_DEFECTO).etapa === "enjuague_final");
     const ultima = lecturaComoBackend(u[u.length - 1], RECETA_DEFECTO, "falla");
     expect(ultima.evaluables.conductividad25C).toBeGreaterThan(PARAMS_DEFECTO.criterioLimpio.conductividad25C);
+  });
+
+  describe("fallas aleatorias (escenario falla)", () => {
+    const SEMILLAS = [1, 2, 3, 42, 2026, 99999, 123456789, 4000000000];
+    const conSemilla = (semilla: number) => ({ ...PARAMS_MODELO_DEFECTO, semilla });
+    const alertasConSemilla = (semilla: number) => {
+      const claves: string[] = [];
+      for (const t of instantesUplink(RECETA_DEFECTO)) {
+        const { estadoProceso, sondas } = estadoEn(t, RECETA_DEFECTO, "falla", conSemilla(semilla));
+        const r = decodeWqs(encodeWqsFPort2(datosUplinkWqs(sondas, 3.6)), 2, "1.2");
+        if (!r.ok || r.fPort !== 2) throw new Error("no decodificó");
+        const v = validarYLimpiarValores(mapearAValores(r.datos, SONDAS_SEED), SONDAS_SEED);
+        if (!v.ok) throw new Error(v.error);
+        const numericos: Partial<Record<Variable, number>> = {};
+        for (const [k, n] of Object.entries(v.limpios)) if (typeof n === "number") numericos[k as Variable] = n;
+        const d = derivarLectura(numericos, PARAMS_DEFECTO, v.confianza);
+        for (const a of alertasDeLectura({
+          etapa: estadoProceso.etapa, numericos, derivados: d.derivados,
+          confianza: { ...v.confianza, ...d.confianza },
+          rangos: UMBRALES_SEED[estadoProceso.etapa] ?? {}, sondas: SONDAS_SEED,
+        })) claves.push(`${estadoProceso.etapa}/${a.clave}`);
+      }
+      return claves;
+    };
+
+    it("cada ciclo tiene 4 o 5 fallas distintas, deterministas por semilla", () => {
+      for (const s of SEMILLAS) {
+        const f = fallasDelCiclo(s, RECETA_DEFECTO);
+        expect(f.length).toBeGreaterThanOrEqual(4);
+        expect(f.length).toBeLessThanOrEqual(5);
+        expect(new Set(f.map((x) => x.id)).size).toBe(f.length);
+        expect(fallasDelCiclo(s, RECETA_DEFECTO)).toEqual(f);
+      }
+    });
+
+    it("semillas distintas dan conjuntos de fallas distintos", () => {
+      const conjuntos = new Set(SEMILLAS.map((s) => fallasDelCiclo(s, RECETA_DEFECTO).map((f) => `${f.id}@${f.centroS}`).join("|")));
+      expect(conjuntos.size).toBeGreaterThan(1);
+    });
+
+    it("cada falla programada la detecta el backend como alerta (varias por ciclo)", () => {
+      for (const s of SEMILLAS) {
+        const claves = new Set(alertasConSemilla(s));
+        const f = fallasDelCiclo(s, RECETA_DEFECTO);
+        for (const x of f) {
+          const clave = x.ph !== undefined ? `${x.etapa}/ph`
+            : x.temp !== undefined ? `${x.etapa}/tempSonda`
+            : x.conductividad! > 2000 ? `${x.etapa}/conductividad_saturacion`
+            : `${x.etapa}/conductividad`;
+          expect(claves, `semilla ${s}: ${x.id}`).toContain(clave);
+        }
+        expect(claves.size).toBeGreaterThanOrEqual(3);
+      }
+    });
+
+    it("el catálogo cubre pH, conductividad y temperatura", () => {
+      const ids = new Set(SEMILLAS.flatMap((s) => fallasDelCiclo(s, RECETA_DEFECTO)).flatMap((f) =>
+        [f.ph !== undefined && "ph", f.conductividad !== undefined && "conductividad", f.temp !== undefined && "temp"]));
+      for (const v of ["ph", "conductividad", "temp"]) expect(ids.has(v)).toBe(true);
+    });
+
+    it("la semilla no afecta al escenario normal (sigue sin alertas)", () => {
+      for (const s of SEMILLAS) {
+        for (const t of instantesUplink(RECETA_DEFECTO)) {
+          expect(estadoEn(t, RECETA_DEFECTO, "normal", conSemilla(s)).sondas)
+            .toEqual(estadoEn(t, RECETA_DEFECTO, "normal", conSemilla(s)).sondas);
+        }
+      }
+      expect(alertasDe("normal")).toEqual([]);
+    });
   });
 
   // PENDIENTES-DASHBOARD.md, punto 4: sobre 60 °C las sondas quedan fuera de

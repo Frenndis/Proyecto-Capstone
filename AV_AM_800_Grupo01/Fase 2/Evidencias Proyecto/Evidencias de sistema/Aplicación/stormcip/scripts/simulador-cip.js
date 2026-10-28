@@ -250,7 +250,12 @@ async function prepararCiclo() {
  * llama en cuanto el ciclo existe.
  */
 async function ejecutarCiclo(escenario, alCrear = () => {}) {
-  const { receta, devEui, plantaId, params } = await prepararCiclo();
+  const preparado = await prepararCiclo();
+  const { receta, devEui, plantaId } = preparado;
+  // En "falla" cada ciclo usa una semilla nueva, así que las 3-4 fallas son otras cada vez
+  const params = escenario === "falla"
+    ? { ...preparado.params, semilla: Math.floor(Math.random() * 0xffffffff) }
+    : preparado.params;
   const estadoEn = (t) => modelo.estadoEn(t, receta, escenario, params);
 
   pausaS = 0;
@@ -263,6 +268,11 @@ async function ejecutarCiclo(escenario, alCrear = () => {}) {
 
   console.log(`Ciclo ${cicloId} · línea ${LINEA} · ${DISPOSITIVO} · escenario ${escenario} · ${total} s`);
   console.log(`Entorno: ${PROD ? "PRODUCCIÓN" : "emuladores"} (${projectId}) · uplinks a ${URL_TTN}`);
+  if (escenario === "falla") {
+    for (const f of modelo.fallasDelCiclo(params.semilla, receta)) {
+      console.log(`Falla programada: ${f.etapa} a los ${f.centroS} s de la etapa · ${f.descripcion}`);
+    }
+  }
   console.log(`--- ${receta[0].etapa}`);
 
   const tActual = () => reloj.tiempoModelo(Date.now(), t0, pausaS, total);

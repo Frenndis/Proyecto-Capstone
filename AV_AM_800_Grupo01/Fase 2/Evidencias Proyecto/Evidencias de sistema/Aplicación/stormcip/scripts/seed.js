@@ -65,24 +65,21 @@ const db = admin.firestore();
   // caudal, presion, concentracion) no se evalúan: o no existen como variable o
   // ninguna sonda las provee, así que una alerta sobre ellas nunca se dispararía.
   //
-  // El indicador real de "agua limpia" es conductividad25C, no la conductividad
-  // cruda: sin compensar por temperatura dos lecturas no son comparables.
-  //
-  // 1500 µS/cm en preenjuague y enjuague: bajo el tope de la DR-ECK1.0 (2000).
-  // Supone que la APP compensa la temperatura (la sonda entrega el valor crudo):
-  // hasta ~42 °C, una sonda saturada implica EC25 > 1500, así que la alerta de
-  // saturación y la de umbral no se contradicen. Si Dragino confirma que la
-  // sonda ya compensa, hay que revisar este valor. Sin umbrales de turbidez:
-  // el equipo comprado no la mide.
+  // Las alertas NO comparan la conductividad compensada a 25 °C
+  // (conductividad25C): se sigue calculando y mostrando como dato, y el criterio
+  // de limpieza (configuracion/calculos.criterioLimpio) no cambia. Sí comparan la
+  // lectura general (conductividad cruda, en µS/cm), el pH y la temperatura del
+  // líquido (tempSonda y tempEc). Sin umbrales de temperatura en el enjuague: ahí
+  // el retorno llega tibio por el arrastre del lavado anterior. Sin umbrales de
+  // turbidez: el equipo comprado no la mide.
   // ⚠ Provisionales: confirmar con el cliente.
-  const enjuagueInicial = {
-    ph: { min: 5, max: 11 }, conductividad25C: { max: 1500 },
-  };
+  const enjuagueInicial = { ph: { min: 5, max: 11 }, conductividad: { max: 1500 } };
   const enjuagueLimpio = {
-    ph: { min: 6, max: 8.5 }, conductividad25C: { max: 300 },
+    ph: { min: 6, max: 8.5 }, conductividad: { max: 400 },
+    tempSonda: { max: 45 }, tempEc: { max: 45 },
   };
   await db.doc("configuracion/umbrales").set({
-    preenjuague: enjuagueInicial,
+    preenjuague: { ...enjuagueInicial, tempSonda: { max: 40 }, tempEc: { max: 40 } },
     // Etapas químicas: fuera del alcance de monitoreo (las sondas trabajan fuera
     // de su rango físico ahí). Se dejan sin umbrales de sonda a propósito.
     //
