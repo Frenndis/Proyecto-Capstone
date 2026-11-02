@@ -29,11 +29,11 @@ const DATOS = {
     firmware: "<COMPLETAR>", // ej. "1.2" — confirmar con el uplink de estado (FPort=5) real, no adivinar
     sondas: [
       // Completar según lo que esté físicamente conectado en este equipo.
-      // Modelos válidos: ver MODELOS_SONDA en functions/src/types.ts
+      // Modelos válidos: ver CATALOGO_SONDAS en functions/src/types.ts.
+      // Equipo comprado (cotización COT-2026-1917): DR-PH01 + DR-ECK1.0, sin
+      // turbidez (DR-TS1) ni DS18B20. Descomentar si coincide con lo instalado:
       // { modelo: "DR-PH01" },
-      // { modelo: "DR-ECK10.0" },
-      // { modelo: "DR-TS1" },
-      // { modelo: "DS18B20" },
+      // { modelo: "DR-ECK1.0" },
     ],
   },
   ciclo: {
@@ -43,7 +43,8 @@ const DATOS = {
     etapaInicial: "<COMPLETAR>", // una de ETAPAS en functions/src/types.ts
   },
   // Umbrales de proceso reales por etapa, acordados con el cliente —
-  // no copiar los de scripts/seed.js, esos son de ejemplo.
+  // no copiar los de scripts/seed.js, esos son de ejemplo. Con la DR-ECK1.0
+  // ningún umbral de conductividad puede superar su tope (2000 µS/cm).
   umbrales: {
     // preenjuague: { caudal: { min: <COMPLETAR> }, presion: { min: <COMPLETAR>, max: <COMPLETAR> } },
   },

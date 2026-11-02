@@ -1,171 +1,505 @@
-import { onRequest } from "firebase-functions/v2/https";
-import { getFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
-import { createHash } from "crypto";
+// Filtro de calidad + escritura. Compartido por ingestLectura (HTTP legado,
+// ver http.ts) y ttnUplink (webhook LoRaWAN): ambos terminan acá.
 import {
-  VARIABLES, ETAPAS, Variable, Etapa, Umbrales, Sonda, EspecVariable, CATALOGO_SONDAS,
+  getFirestore, DocumentReference, FieldPath, FieldValue, Timestamp, Transaction,
+} from "firebase-admin/firestore";
+import {
+  Confianza, Derivado, ESQUEMA_VERSION, ETAPAS, ETAPAS_MONITOREADAS, Etapa, PARAMS_DEFECTO,
+  ParamsCalculo, Rango, TEMPERATURAS_LIQUIDO, Umbrales, UltimaLectura, VARIABLES, Variable,
+  Dispositivo, Sonda, fueraDeRango, sondaDe, specDe,
 } from "./types";
+import { derivarLectura } from "./calculos";
+import { ResultadoQuimica, calcularQuimica } from "./concentracion";
+import { configConcentracion } from "./concentracionConfig";
 
-type ResultadoIngesta = { status: number; body: Record<string, unknown> };
+// null = "sensor no conectado" (centinela del DS18B20 externo, ver wqsDecoder):
+// se guarda tal cual y se salta su validación de rango.
+export type Limpios = Partial<Record<Variable, number | null>>;
+
+/** Confianza de cada variable medida guardada (no incluye las null). */
+export type ConfianzaValores = Partial<Record<Variable, Confianza>>;
 
 export type ResultadoValidacion =
-  | { ok: true; limpios: Partial<Record<Variable, number | null>> }
+  | { ok: true; limpios: Limpios; confianza: ConfianzaValores; descartadas: Record<string, string> }
   | { ok: false; error: string };
 
+export type ResultadoIngesta =
+  | {
+      ok: true; lecturaId: string; alertas: number; descartadas: Record<string, string>;
+      /** Etapa del ciclo con que se guardó la lectura (la de etapaActual al confirmar). */
+      etapa: Etapa;
+      /** true = la lectura ya estaba guardada (reintento con ID determinista): no se escribió nada. */
+      duplicado?: boolean;
+    }
+  | { ok: false; codigo: number; error: string };
+
 /**
- * Valida y limpia los valores crudos de una lectura: variable conocida, numérica
- * o `null`, y si el dispositivo declara `sondas` (unidad WQS-LB), pertenencia y
- * rango físico. Dispositivos sin `sondas` (ej. esp32-01) mantienen el
- * comportamiento anterior (solo variable conocida + numérica).
+ * ID de alerta: una por ciclo + etapa + variable. Mientras la condición
+ * persiste se actualiza el mismo documento en vez de crear uno por lectura.
+ */
+export function idAlerta(cicloId: string, etapa: string, variable: string): string {
+  return `${cicloId}_${etapa}_${variable}`;
+}
+
+/** Lo que interesa de una alerta ya guardada para decidir cómo actualizarla. */
+export type AlertaGuardada = {
+  desde?: Timestamp; hasta?: Timestamp; conteo?: number; reconocida?: boolean;
+};
+
+export type CamposAlerta = {
+  /** true = se reescribe el documento completo (sin merge): borra reconocidaPor/En del episodio anterior. */
+  nuevoEpisodio: boolean;
+  campos: {
+    desde: Timestamp; hasta: Timestamp; conteo: number;
+    ultimoValor?: number; reconocida?: false;
+  };
+};
+
+/**
+ * Campos de tiempo y estado de una alerta ante una lectura fuera de rango.
  *
- * `null` significa "sensor no conectado" (ej. el centinela del DS18B20 externo,
- * ver wqsDecoder.ts), no un dato inválido: se guarda tal cual y se saltan
- * pertenencia y rango para esa variable puntual.
+ * - `desde` y `hasta` salen del mismo reloj: el `ts` de la lectura (antes `desde`
+ *   era la hora del servidor y además se pisaba en cada repetición).
+ * - Las lecturas pueden llegar desordenadas (reintentos de TTN, simulador que
+ *   fecha hacia atrás): `desde` = mínimo y `hasta` = máximo de lo visto, y
+ *   `ultimoValor` solo cambia si la lectura es la más reciente.
+ * - Una alerta ya reconocida que vuelve a dispararse es un episodio nuevo.
  *
- * Función pura (sin Firestore) para poder testearla sin emulador.
+ * Función pura (sin Firestore): se puede testear sin emulador.
+ */
+export function camposAlerta(
+  existente: AlertaGuardada | undefined, ts: Timestamp, valor: number,
+): CamposAlerta {
+  if (!existente || existente.reconocida === true) {
+    return {
+      nuevoEpisodio: true,
+      campos: { desde: ts, hasta: ts, ultimoValor: valor, conteo: 1, reconocida: false },
+    };
+  }
+  const t = ts.toMillis();
+  const desde = existente.desde && existente.desde.toMillis() <= t ? existente.desde : ts;
+  const esLaMasReciente = !existente.hasta || t >= existente.hasta.toMillis();
+  return {
+    nuevoEpisodio: false,
+    campos: {
+      desde,
+      hasta: esLaMasReciente ? ts : existente.hasta!,
+      conteo: (existente.conteo ?? 0) + 1,
+      ...(esLaMasReciente ? { ultimoValor: valor } : {}),
+    },
+  };
+}
+
+export type EventoAlerta = { id: string; valor: number; existente?: AlertaGuardada };
+
+export type PlanEscritura =
+  | { duplicado: true }
+  | {
+      duplicado: false;
+      alertas: (CamposAlerta & { id: string })[];
+      /** false = lectura atrasada: se guarda en `lecturas` pero no pisa `ultimaLectura`. */
+      actualizarUltima: boolean;
+    };
+
+/**
+ * Decide qué escribir dentro de la transacción de ingesta, a partir de lo leído.
+ * Si la lectura ya existe (reintento con ID determinista) no se escribe nada:
+ * repetirla volvería a contar `conteo` en las alertas.
+ *
+ * `ultimaTs` es el ts de ciclos/{id}.ultimaLectura.{deviceId}: una lectura
+ * atrasada (reintento de TTN, datalog) no reemplaza a una más nueva. Con ts
+ * igual sí, para que un reenvío corregido quede como la última.
+ *
+ * Función pura (sin Firestore): se puede testear sin emulador.
+ */
+export function planificarEscritura(
+  lecturaYaExiste: boolean, eventos: EventoAlerta[], ts: Timestamp, ultimaTs?: Timestamp,
+): PlanEscritura {
+  if (lecturaYaExiste) return { duplicado: true };
+  return {
+    duplicado: false,
+    alertas: eventos.map((e) => ({ id: e.id, ...camposAlerta(e.existente, ts, e.valor) })),
+    actualizarUltima: !ultimaTs || ts.toMillis() >= ultimaTs.toMillis(),
+  };
+}
+
+/**
+ * Valida y limpia los valores crudos: variable conocida, numérica o null, y
+ * —si el equipo declara sondas— pertenencia y rango FÍSICO de fábrica:
+ *
+ *  - Bajo el mínimo físico: se DESCARTA esa variable (con su motivo). En las
+ *    sondas del proyecto el mínimo es un piso físico (0 µS/cm, pH 0), así que
+ *    un valor por debajo es falla de sensor, no una medición.
+ *  - Sobre el máximo, según `satura` en CATALOGO_SONDAS:
+ *    · variable que satura (conductividad, temperaturas de sonda): en el
+ *      máximo o sobre él se guarda el máximo con confianza "saturado". Se usa
+ *      ≥ porque una sonda que topa reporta justo su máximo.
+ *    · variable que no satura (pH, DS18B20): sobre el máximo se DESCARTA
+ *      como falla de sensor; justo en el máximo es un valor válido.
+ *  - Si la temperatura de la propia sonda supera su tempMaxOperacion (o está
+ *    saturada y no se sabe cuánto mide), la variable se guarda con confianza
+ *    "fuera_de_operacion"; prevalece sobre "saturado".
+ *
+ * Un descarte no invalida la lectura completa: se pierde solo esa variable.
+ *
+ * Función pura (sin Firestore): se puede testear sin emulador.
  */
 export function validarYLimpiarValores(
   valoresCrudos: Record<string, unknown>,
-  sondas: Sonda[] | undefined,
+  sondas?: Record<string, Sonda>,
 ): ResultadoValidacion {
-  const limpios: Partial<Record<Variable, number | null>> = {};
+  const limpios: Limpios = {};
+  const confianza: ConfianzaValores = {};
+  const descartadas: Record<string, string> = {};
+  const conSondas = !!sondas && Object.keys(sondas).length > 0;
+
+  // 1. Rango físico de cada variable
   for (const v of VARIABLES) {
     const n = valoresCrudos[v];
     if (n === undefined) continue;
-    if (n === null) { limpios[v] = null; continue; }
+    if (n === null) { limpios[v] = null; continue; }      // sensor no conectado
     if (typeof n !== "number" || !Number.isFinite(n)) {
-      return { ok: false, error: `Valor inválido en ${v}` };
+      descartadas[v] = "no es un número finito";
+      continue;
+    }
+    if (conSondas) {
+      const spec = specDe(v, sondas);
+      if (!spec) { descartadas[v] = "el equipo no tiene una sonda activa para esta variable"; continue; }
+      if (n < spec.min) {
+        descartadas[v] = `bajo el mínimo físico (${n} < ${spec.min} ${spec.unidad}): falla de sensor`;
+        continue;
+      }
+      if (spec.satura && n >= spec.max) {
+        limpios[v] = spec.max;
+        confianza[v] = "saturado";
+        continue;
+      }
+      if (!spec.satura && n > spec.max) {
+        descartadas[v] = `sobre el máximo de escala (${n} > ${spec.max} ${spec.unidad}): falla de sensor`;
+        continue;
+      }
     }
     limpios[v] = n;
-  }
-  if (Object.keys(limpios).length === 0) {
-    return { ok: false, error: "Sin variables válidas" };
+    confianza[v] = "medido";
   }
 
-  if (sondas?.length) {
-    const especPorVariable = new Map<Variable, EspecVariable>();
-    for (const { modelo } of sondas) {
-      for (const [v, espec] of Object.entries(CATALOGO_SONDAS[modelo])) {
-        especPorVariable.set(v as Variable, espec as EspecVariable);
-      }
-    }
-    for (const [v, n] of Object.entries(limpios) as [Variable, number | null][]) {
-      if (n === null) continue;
-      const espec = especPorVariable.get(v);
-      if (!espec) {
-        return { ok: false, error: `El dispositivo no tiene una sonda para "${v}"` };
-      }
-      if (n < espec.min || n > espec.max) {
-        return { ok: false, error: `Valor de ${v} fuera de rango físico (${espec.min}–${espec.max} ${espec.unidad})` };
-      }
+  // 2. Temperatura máxima de operación de cada sonda (necesita el paso 1 completo)
+  if (conSondas) {
+    const tempMedida = (t: Variable) => {
+      const crudo = valoresCrudos[t];
+      return typeof limpios[t] === "number" && typeof crudo === "number" ? crudo : undefined;
+    };
+    for (const v of Object.keys(confianza) as Variable[]) {
+      const sonda = sondaDe(v, sondas);
+      const tMax = sonda?.spec.tempMaxOperacion;
+      if (!sonda || tMax === undefined) continue;
+      // Sonda sin temperatura propia (turbidez): la mayor del líquido disponible
+      const temps = sonda.temperatura ? [sonda.temperatura] : TEMPERATURAS_LIQUIDO;
+      const fuera = temps.some((t) => {
+        const c = tempMedida(t);
+        return c !== undefined && (c > tMax || confianza[t] === "saturado");
+      });
+      if (fuera) confianza[v] = "fuera_de_operacion";
     }
   }
 
-  return { ok: true, limpios };
+  if (Object.keys(limpios).length === 0) return { ok: false, error: "Sin variables válidas" };
+  return { ok: true, limpios, confianza, descartadas };
 }
 
-/**
- * ID determinista de una alerta a partir de la lectura que la disparó. Mismo
- * `lecturaId` + `variable` -> mismo ID siempre, para que un reintento de TTN
- * (misma lectura reprocesada) sobrescriba la alerta en vez de duplicarla.
- */
-export function idAlerta(lecturaId: string, variable: string): string {
-  return `${lecturaId}_${variable}`;
-}
+export type AlertaDisparada = {
+  /** Sufijo del ID: la variable, o `{variable}_saturacion`. */
+  clave: string;
+  variable: string;
+  tipo: "umbral" | "saturacion";
+  valor: number;
+  confianza: Confianza;
+  min: number | null;
+  max: number | null;
+};
 
 /**
- * Valida y escribe una lectura. No autentica al caller: eso es responsabilidad
- * de quien invoque esta función (ingestLectura por API key, ttnUplink por webhook).
+ * Qué alertas dispara una lectura ya validada.
+ *
+ *  - Umbral de proceso (configuracion/umbrales) sobre variables y derivados.
+ *    Lo "fuera_de_operacion" no se evalúa. Un valor "saturado" es una cota
+ *    inferior: solo puede violar con certeza un máximo, no un mínimo.
+ *  - Saturación: en etapas monitoreadas, toda variable medida que llegó al
+ *    tope de su sonda genera su propia alerta (documento aparte del umbral),
+ *    con `max` = tope de la sonda.
+ *
+ * Función pura (sin Firestore): se puede testear sin emulador.
  */
-export async function procesarLectura(params: {
-  dev: FirebaseFirestore.DocumentSnapshot;
-  devRef: FirebaseFirestore.DocumentReference;
-  cicloId: string;
+export function alertasDeLectura(opts: {
   etapa: string;
-  valoresCrudos: Record<string, unknown>;
-  ts?: number;
-  /** ID determinista del doc de lectura (ej. `{devEui}_{tsSegundos}`); si no viene, se autogenera. */
-  lecturaId?: string;
-  /** Campos que se guardan directo en la lectura sin pasar por `VARIABLES` (ej. bateriaV, hex). */
+  numericos: Partial<Record<Variable, number>>;
+  derivados: Partial<Record<Derivado, number>>;
+  confianza: Partial<Record<Variable | Derivado, Confianza>>;
+  rangos: Partial<Record<string, Rango>>;
+  sondas?: Record<string, Sonda>;
+}): AlertaDisparada[] {
+  const { etapa, numericos, derivados, confianza, rangos, sondas } = opts;
+  const out: AlertaDisparada[] = [];
+
+  const evaluables: Record<string, number> = { ...numericos, ...derivados };
+  for (const [v, valor] of Object.entries(evaluables)) {
+    const conf = confianza[v as Variable | Derivado] ?? "medido";
+    const r = rangos[v];
+    if (!r || conf === "fuera_de_operacion") continue;
+    if (!fueraDeRango(valor, conf === "saturado" ? { max: r.max } : r)) continue;
+    out.push({
+      clave: v, variable: v, tipo: "umbral", valor, confianza: conf,
+      min: r.min ?? null, max: r.max ?? null,
+    });
+  }
+
+  if ((ETAPAS_MONITOREADAS as string[]).includes(etapa)) {
+    for (const [v, valor] of Object.entries(numericos) as [Variable, number][]) {
+      if (confianza[v] !== "saturado") continue;
+      out.push({
+        clave: `${v}_saturacion`, variable: v, tipo: "saturacion", valor, confianza: "saturado",
+        min: null, max: specDe(v, sondas)?.max ?? valor,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Variables que la lectura demuestra que el equipo mide: las guardadas con
+ * número, sus derivados y las descartadas por un valor inválido (la sonda
+ * existe aunque esta vez fallara). No cuentan las null (sensor desconectado)
+ * ni las descartadas por no tener sonda activa.
+ *
+ * Función pura (sin Firestore): se puede testear sin emulador.
+ */
+export function variablesVistasDe(
+  limpios: Limpios, derivados: Partial<Record<Derivado, number>>,
+  descartadas: Record<string, string>, sondas?: Record<string, Sonda>,
+): string[] {
+  const conSondas = !!sondas && Object.keys(sondas).length > 0;
+  const vistas = new Set<string>();
+  for (const [v, n] of Object.entries(limpios)) if (typeof n === "number") vistas.add(v);
+  for (const v of Object.keys(derivados)) vistas.add(v);
+  for (const v of Object.keys(descartadas)) {
+    if ((VARIABLES as readonly string[]).includes(v) && (!conSondas || specDe(v as Variable, sondas))) {
+      vistas.add(v);
+    }
+  }
+  return [...vistas].sort();
+}
+
+/** Lo mínimo de una Transaction de Firestore que usa la ingesta (los tests lo simulan). */
+export type TxIngesta = Pick<Transaction, "getAll" | "set" | "update">;
+
+/** Todo lo que la escritura necesita y NO depende de la etapa: se calcula antes de la transacción. */
+export type DatosIngesta = {
+  deviceId: string;
+  cicloId: string;
+  ts: Timestamp;
+  lecturaRef: DocumentReference;
+  cicloRef: DocumentReference;
+  dispositivoRef: DocumentReference;
+  refAlerta: (id: string) => DocumentReference;
+  limpios: Limpios;
+  numericos: Partial<Record<Variable, number>>;
+  derivados: Partial<Record<Derivado, number>>;
+  metodo: Partial<Record<Derivado, string>>;
+  confianza: Partial<Record<Variable | Derivado, Confianza>>;
+  descartadas: Record<string, string>;
+  vistas: string[];
+  umbrales: Umbrales;
+  sondas?: Record<string, Sonda>;
   extra?: Record<string, unknown>;
-}): Promise<ResultadoIngesta> {
-  const { dev, devRef, cicloId, etapa, valoresCrudos, ts, lecturaId, extra } = params;
-  const db = getFirestore();
+  /**
+   * Concentración química para la etapa dada. Es función de la etapa porque el
+   * químico (soda / ácido / ninguno) depende de ella, y la etapa solo se conoce
+   * dentro de la transacción. Opcional: sin ella la lectura no lleva `quimica`.
+   */
+  quimicaPara?: (etapa: Etapa) => ResultadoQuimica;
+};
 
-  if (!ETAPAS.includes(etapa as Etapa)) {
-    return { status: 400, body: { error: `Etapa inválida. Usar: ${ETAPAS.join(", ")}` } };
+export type ResultadoTx =
+  | { ok: false; codigo: number; error: string }
+  | { ok: true; etapa: Etapa; duplicado: true }
+  | { ok: true; etapa: Etapa; duplicado: false; alertas: number };
+
+/**
+ * Cuerpo de la transacción de ingesta.
+ *
+ * La etapa sale del ciclo leído AQUÍ, no de quien llama: si el operador o el
+ * script director cambia de etapa mientras llega la lectura, la lectura, sus
+ * umbrales y el ID de sus alertas usan la etapa que tiene el ciclo al
+ * confirmar (si cambia después de leerla, Firestore reintenta la transacción).
+ *
+ * La ingesta NO escribe `etapaActual`: esa la escriben solo el operador o el
+ * script director. Antes la reescribía con la etapa leída fuera de la
+ * transacción, y un cambio de etapa concurrente se podía revertir.
+ */
+export async function transaccionIngesta(tx: TxIngesta, d: DatosIngesta): Promise<ResultadoTx> {
+  // Firestore exige hacer todas las lecturas antes de cualquier escritura
+  const [lecturaSnap, cicloSnap] = await tx.getAll(d.lecturaRef, d.cicloRef);
+  if (!cicloSnap.exists) return { ok: false, codigo: 404, error: "Ciclo no existe" };
+  const etapa = cicloSnap.get("etapaActual");
+  if (!ETAPAS.includes(etapa)) {
+    return { ok: false, codigo: 409, error: `El ciclo no tiene una etapaActual válida (${etapa})` };
   }
 
-  const validacion = validarYLimpiarValores(valoresCrudos, dev.get("sondas") as Sonda[] | undefined);
-  if (!validacion.ok) {
-    return { status: 400, body: { error: validacion.error } };
-  }
-  const { limpios } = validacion;
+  // 4. Alertas (umbral y saturación), deduplicadas por ciclo+etapa+clave
+  const disparadas = alertasDeLectura({
+    etapa, numericos: d.numericos, derivados: d.derivados, confianza: d.confianza,
+    rangos: d.umbrales[etapa as Etapa] ?? {}, sondas: d.sondas,
+  }).map((a) => ({ ...a, ref: d.refAlerta(idAlerta(d.cicloId, etapa, a.clave)) }));
+  const alertaSnaps = disparadas.length ? await tx.getAll(...disparadas.map((a) => a.ref)) : [];
 
-  // Ciclo y umbrales de la etapa
-  const cicloRef = db.doc(`ciclos/${cicloId}`);
-  const [ciclo, cfg] = await Promise.all([cicloRef.get(), db.doc("configuracion/umbrales").get()]);
-  if (!ciclo.exists) return { status: 404, body: { error: "Ciclo no existe" } };
-  const umbrales = (cfg.get(etapa) ?? {}) as Umbrales;
-  const momento = typeof ts === "number" ? Timestamp.fromMillis(ts) : Timestamp.now();
+  // El ts de ultimaLectura decide si esta lectura la reemplaza
+  const ultimaTs = cicloSnap.data()?.ultimaLectura?.[d.deviceId]?.ts;
+  const plan = planificarEscritura(
+    lecturaSnap.exists,
+    disparadas.map((a, i) => ({
+      id: a.ref.id, valor: a.valor,
+      existente: alertaSnaps[i].exists ? alertaSnaps[i].data() as AlertaGuardada : undefined,
+    })),
+    d.ts,
+    ultimaTs instanceof Timestamp ? ultimaTs : undefined,
+  );
+  if (plan.duplicado) return { ok: true, etapa, duplicado: true };
 
-  // Escritura atómica: lectura + estado del ciclo + alertas
-  const batch = db.batch();
-  const lecturaRef = lecturaId
-    ? cicloRef.collection("lecturas").doc(lecturaId)
-    : cicloRef.collection("lecturas").doc();
-  batch.set(lecturaRef, { ts: momento, etapa, deviceId: devRef.id, ...limpios, ...extra });
-  batch.update(cicloRef, {
-    etapaActual: etapa,
-    ultimaLectura: { ts: momento, ...limpios },
-    actualizadoEn: FieldValue.serverTimestamp(),
+  const quimica = d.quimicaPara?.(etapa as Etapa);
+  tx.set(d.lecturaRef, {
+    v: ESQUEMA_VERSION, ts: d.ts, etapa, deviceId: d.deviceId,
+    valores: d.limpios, derivados: d.derivados, metodo: d.metodo, confianza: d.confianza,
+    ...(quimica ? { quimica } : {}),
+    ...d.extra,
   });
 
-  let alertas = 0;
-  for (const [v, valor] of Object.entries(limpios) as [Variable, number | null][]) {
-    if (valor === null) continue;
-    const r = umbrales[v];
-    if (!r) continue;
-    const fuera = (r.min !== undefined && valor < r.min) || (r.max !== undefined && valor > r.max);
-    if (!fuera) continue;
-    batch.set(db.collection("alertas").doc(idAlerta(lecturaRef.id, v)), {
-      cicloId, lineaId: ciclo.get("lineaId") ?? null, etapa, variable: v, valor,
-      min: r.min ?? null, max: r.max ?? null,
-      severidad: "advertencia", ts: momento, reconocida: false,
-    });
-    alertas++;
-  }
-  batch.update(devRef, { ultimoPing: FieldValue.serverTimestamp() });
-  await batch.commit();
+  // ultimaLectura anidada por dispositivo: dos equipos no se pisan entre sí.
+  // update con FieldPath reemplaza el mapa del dispositivo completo: un set
+  // con merge mezclaría las `descartadas` de la lectura anterior. Una lectura
+  // atrasada no la pisa, pero sí suma a variablesVistas.
+  const ultima: UltimaLectura = {
+    ts: d.ts, valores: d.limpios, derivados: d.derivados, confianza: d.confianza,
+    descartadas: d.descartadas,
+    ...(quimica ? { quimica } : {}),
+  };
+  tx.update(
+    d.cicloRef,
+    "actualizadoEn", FieldValue.serverTimestamp(),
+    ...(d.vistas.length
+      ? [new FieldPath("variablesVistas", d.deviceId), FieldValue.arrayUnion(...d.vistas)] : []),
+    ...(plan.actualizarUltima ? [new FieldPath("ultimaLectura", d.deviceId), ultima] : []),
+  );
 
-  return { status: 201, body: { ok: true, lecturaId: lecturaRef.id, alertas } };
+  plan.alertas.forEach(({ nuevoEpisodio, campos }, i) => {
+    const { variable, tipo, min, max, confianza: confValor, ref } = disparadas[i];
+    const datos = {
+      cicloId: d.cicloId, lineaId: cicloSnap.get("lineaId") ?? null, etapa, variable, tipo,
+      min, max, severidad: "advertencia",
+      ...campos,
+      // Acompaña a ultimoValor: "saturado" = el valor real es ≥ ultimoValor
+      ...("ultimoValor" in campos ? { confianza: confValor } : {}),
+    };
+    // Episodio nuevo: documento completo, sin restos del reconocimiento anterior
+    if (nuevoEpisodio) tx.set(ref, datos);
+    else tx.set(ref, datos, { merge: true });
+  });
+
+  tx.update(d.dispositivoRef, { ultimoPing: FieldValue.serverTimestamp() });
+  return { ok: true, etapa, duplicado: false, alertas: plan.alertas.length };
 }
 
 /**
- * POST /api/ingest   header: x-api-key
- * body: { deviceId, cicloId, etapa, ts?(ms), valores: { temperatura, caudal, ... } }
- * Punto de entrada para ESP32 / gateway / simulador que hablan HTTP directo.
+ * Valida y escribe una lectura. NO autentica al caller: eso es responsabilidad
+ * de quien la invoque (http.ts por API key, lorawanAdapter.ts por webhook).
+ *
+ * La etapa NO la decide quien llama: es la `etapaActual` del ciclo al
+ * confirmar la transacción (ver transaccionIngesta).
  */
-export const ingestLectura = onRequest(async (req, res) => {
-  if (req.method !== "POST") { res.status(405).json({ error: "Usar POST" }); return; }
-
+export async function procesarLectura(opts: {
+  deviceId: string;
+  dispositivo: Dispositivo;
+  cicloId: string;
+  /**
+   * Etapa que informó el emisor (cuerpo del endpoint HTTP legado). No se usa:
+   * si difiere de la del ciclo solo queda un console.warn.
+   */
+  etapaRecibida?: string;
+  valores: Record<string, unknown>;
+  ts: Timestamp;
+  /** ID determinista del doc (ej. `{devEui}_{tsSegundos}`) → idempotencia ante reintentos de TTN. */
+  lecturaId?: string;
+  /** Campos que se guardan en la lectura sin pasar por VARIABLES (ej. bateriaV, hex). */
+  extra?: Record<string, unknown>;
+}): Promise<ResultadoIngesta> {
   const db = getFirestore();
-  const { deviceId, cicloId, etapa, ts, valores } = req.body ?? {};
-  const apiKey = req.get("x-api-key");
+  const { deviceId, dispositivo, cicloId, etapaRecibida, valores, ts, extra } = opts;
 
-  if (!deviceId || !cicloId || !etapa || !valores || !apiKey) {
-    res.status(400).json({ error: "Faltan campos: deviceId, cicloId, etapa, valores, x-api-key" });
-    return;
+  // 1. Validación física (rango de la sonda), distinta de los umbrales de proceso (paso 4)
+  const validacion = validarYLimpiarValores(valores, dispositivo.sondas);
+  if (!validacion.ok) return { ok: false, codigo: 400, error: validacion.error };
+  const { limpios, descartadas } = validacion;
+  // Un descarte pierde un dato del equipo: queda en el log además de en la respuesta
+  for (const [variable, motivo] of Object.entries(descartadas)) {
+    console.warn("procesarLectura: variable descartada", {
+      deviceId, variable, valor: valores[variable], motivo,
+    });
   }
 
-  // Autenticar dispositivo (se guarda solo el hash de la API key)
-  const devRef = db.doc(`dispositivos/${deviceId}`);
-  const dev = await devRef.get();
-  const hash = createHash("sha256").update(apiKey).digest("hex");
-  if (!dev.exists || dev.get("apiKeyHash") !== hash || dev.get("activo") === false) {
-    res.status(401).json({ error: "Dispositivo no autorizado" });
-    return;
+  // 2. Configuración (el ciclo se lee dentro de la transacción)
+  const [cfgU, cfgC] = await Promise.all([
+    db.doc("configuracion/umbrales").get(),
+    db.doc("configuracion/calculos").get(),
+  ]);
+  const umbrales = (cfgU.data() ?? {}) as Umbrales;
+  const params = { ...PARAMS_DEFECTO, ...(cfgC.data() ?? {}) } as ParamsCalculo;
+
+  // Solo los numéricos entran al cálculo y a la evaluación de umbrales
+  const numericos: Partial<Record<Variable, number>> = {};
+  for (const [v, n] of Object.entries(limpios) as [Variable, number | null][]) {
+    if (typeof n === "number") numericos[v] = n;
   }
 
-  const resultado = await procesarLectura({ dev, devRef, cicloId, etapa, valoresCrudos: valores, ts });
-  res.status(resultado.status).json(resultado.body);
-});
+  // 3. Derivados: cada uno declara método y confianza
+  const derivacion = derivarLectura(numericos, params, validacion.confianza);
+  const { derivados, metodo } = derivacion;
+  const confianza = { ...validacion.confianza, ...derivacion.confianza };
+
+  // 3b. Concentración química (concentracion.ts): depende de la etapa, que solo
+  // se conoce dentro de la transacción. Parámetros: concentracionConfig.ts,
+  // sobreescribibles en configuracion/calculos.concentracion.
+  const cfgQuimica = configConcentracion((cfgC.data() ?? {}).concentracion);
+  const modeloEc = sondaDe("conductividad", dispositivo.sondas)?.modelo;
+  const quimicaPara = (etapa: Etapa) => calcularQuimica({
+    etapa, valores: numericos, confianza: validacion.confianza,
+    modeloSonda: modeloEc, config: cfgQuimica,
+  });
+
+  // El ID se fija fuera de la transacción: si Firestore la reintenta por
+  // contención, el reintento escribe el mismo documento y no uno nuevo.
+  const cicloRef = db.doc(`ciclos/${cicloId}`);
+  const lecturaRef = opts.lecturaId
+    ? cicloRef.collection("lecturas").doc(opts.lecturaId)
+    : cicloRef.collection("lecturas").doc();
+
+  // Transacción (no batch): la etapa y las alertas se deciden con el estado
+  // actual del ciclo y de cada alerta (desde/hasta/conteo/reconocida).
+  const r = await db.runTransaction((tx) => transaccionIngesta(tx, {
+    deviceId, cicloId, ts, lecturaRef, cicloRef,
+    dispositivoRef: db.doc(`dispositivos/${deviceId}`),
+    refAlerta: (id) => db.doc(`alertas/${id}`),
+    limpios, numericos, derivados, metodo, confianza, descartadas,
+    vistas: variablesVistasDe(limpios, derivados, descartadas, dispositivo.sondas),
+    umbrales, sondas: dispositivo.sondas, extra, quimicaPara,
+  }));
+
+  if (!r.ok) return r;
+  if (etapaRecibida !== undefined && etapaRecibida !== r.etapa) {
+    console.warn("procesarLectura: la etapa recibida difiere de la del ciclo; se usa la del ciclo", {
+      deviceId, etapaRecibida, etapaCiclo: r.etapa,
+    });
+  }
+  if (r.duplicado) {
+    return { ok: true, lecturaId: lecturaRef.id, etapa: r.etapa, alertas: 0, descartadas, duplicado: true };
+  }
+  return { ok: true, lecturaId: lecturaRef.id, etapa: r.etapa, alertas: r.alertas, descartadas };
+}

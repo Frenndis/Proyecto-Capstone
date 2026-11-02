@@ -1,6 +1,7 @@
 {
   "name": "stormcip-scripts",
   "private": true,
-  "scripts": { "seed": "node seed.js", "sim": "node simulador.js", "sim:ttn": "node simulador-ttn.js" },
+  "engines": { "node": "22" },
+  "scripts": { "seed": "node seed.js", "sim": "node simulador.js", "sim:ttn": "node simulador-ttn.js", "sim:cip": "node simulador-cip.js", "e2e:quimica": "node e2e-quimica.js", "e2e:volumen": "node e2e-volumen.js", "planta": "node sembrar-planta.js" },
   "dependencies": { "firebase-admin": "^12.7.0" }
 }

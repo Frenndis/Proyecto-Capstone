@@ -4,6 +4,16 @@ import { setGlobalOptions } from "firebase-functions/v2";
 initializeApp();
 setGlobalOptions({ region: "southamerica-west1", maxInstances: 10 });
 
-export { ingestLectura } from "./ingest";
+// ingestLectura vive en http.ts (solo autentica y traduce);
+// ttnUplink en lorawanAdapter.ts. Ambos terminan en procesarLectura().
+export { ingestLectura } from "./http";
 export { ttnUplink } from "./lorawanAdapter";
 export { onUserCreated, setUserRole } from "./auth";
+// Cierre de ciclo: invoca derivarCiclo() y deja los indicadores en el documento.
+export { alCerrarCiclo, recalcularIndicadores } from "./ciclos";
+// Volumen circulado por etapa: integra el caudal de estadoProceso (ver volumenCirculado.ts).
+export { alCambiarEstadoProceso } from "./volumenCirculado";
+// Proyección del fin del enjuague: se recalcula con cada lectura (ver proyeccionEnjuague.ts).
+export { alCrearLectura } from "./proyeccionEnjuague";
+// Planta de demostración: ciclo en vivo, decisiones y ciclos diarios (ver planta/).
+export { iniciarCicloDemo, recalcularDecisiones, planificarCiclos } from "./planta/funciones";

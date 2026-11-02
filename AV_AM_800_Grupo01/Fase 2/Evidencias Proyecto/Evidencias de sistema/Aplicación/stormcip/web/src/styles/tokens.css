@@ -1,0 +1,47 @@
+/* Paleta y medidas de StormCIP (estetica SCADA/HMI oscura).
+   Unico lugar donde se definen: todas las fases posteriores consumen
+   estas variables, no literales de color. */
+
+:root {
+  /* --- Superficies --- */
+  --bg-main: #07111f;
+  --bg-sidebar: #081522;
+  --bg-panel: #0b1a2b;
+  --bg-panel-soft: #0d2034;
+  --bg-card: #0c1c2e;
+  --border: #1a354c;
+  --border-soft: #163047;
+
+  /* --- Texto --- */
+  --text-main: #e8f0f7;
+  --text-secondary: #93a7ba;
+  --text-muted: #62788d;
+
+  /* --- Colores base --- */
+  --cyan: #1bb9e8;
+  --cyan-soft: #157fa5;
+  --green: #2dcf9f;
+  --green-dark: #0b5f52;
+  --yellow: #d39c29;
+  --red: #dc4a68;
+  --magenta: #d84a86;
+
+  /* --- Roles semanticos: usar estos en pantallas nuevas --- */
+  --accent: var(--cyan);          /* estado activo, seleccion, foco */
+  --accent-soft: var(--cyan-soft);
+  --ok: var(--green);             /* dentro de rango, conectado */
+  --estimado: var(--yellow);      /* valor estimado o calculado, no medido */
+  --alerta: var(--red);           /* umbral excedido, sin conexion */
+
+  /* --- Lineas del diagrama de proceso --- */
+  --line-light: #9cb4ca;
+  --line-return: #23c69b;
+
+  /* --- Medidas del armazon --- */
+  --sidebar-w: 240px;
+  --header-h: 60px;
+  --pad: 32px;
+
+  --font-sans: Inter, "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", "Roboto Mono", ui-monospace, monospace;
+}

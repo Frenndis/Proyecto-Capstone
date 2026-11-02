@@ -1,0 +1,208 @@
+# Pendientes detectados en el dashboard
+
+Revisión de una captura del dashboard en producción (`stormcip-972bd.web.app/dashboard`) y del código de la rama `feature/HL` (commit `41425ad`), 6 de octubre de 2026. Ninguno bloquea la demo, pero conviene resolverlos antes de la presentación.
+
+---
+
+## 1. Posible doble compensación de temperatura en conductividad
+
+**Qué se ve:** la tarjeta "Conductividad a 25 °C (calculado)" muestra 199 µS/cm a partir de 202 µS/cm con la sonda a 25,6 °C.
+
+**Dónde está:** `functions/src/calculos.ts` → `derivarLectura` calcula `conductividad25C = EC / (1 + α·(T−25))` con `T = tempEc` y `α = factorCompensacionEC` (0,02).
+
+**Por qué preocupa:** según el manual de Dragino (sección 4.2.2), la DR-ECK10.0 ya compensa la temperatura internamente (coeficiente 0,02, referencia 25 °C). Si el valor que entrega el payload ya viene compensado, la app lo corrige dos veces. Cerca de 25 °C el error es mínimo; en un enjuague a 50 °C rondaría el 50 %. Además, `criterioLimpio` y los umbrales usan `conductividad25C`, así que el error se propagaría a las alertas y a `tiempoHastaLimpio`.
+
+**Cómo verificar:**
+- Preguntar a Dragino si el registro Modbus que reporta el WQS-LB es conductividad compensada o cruda.
+- O, con el sensor real, medir la solución patrón de 12,88 mS/cm a una temperatura distinta de 25 °C y ver cuál de los dos valores coincide.
+
+**Mientras tanto:** documentar el supuesto en `modelo-datos-sensores.md`. Si se confirma que la sonda ya compensa, basta con poner `factorCompensacionEC: 0` en `configuracion/calculos` (sin tocar código).
+
+---
+
+## 2. Horas de la alerta inconsistentes (causa confirmada)
+
+**Qué se ve:** una alerta de pH dice "desde 2:33:34 p.m." y "última 2:03:30 p.m.". La última aparición es media hora anterior al inicio.
+
+**Causa:** en `functions/src/ingest.ts` (escritura de alertas con `merge: true`):
+
+```ts
+desde: FieldValue.serverTimestamp(), hasta: ts,
+```
+
+Hay dos problemas juntos:
+- **Dos relojes distintos:** `desde` es la hora del servidor y `hasta` es la hora de la lectura (`ts`). `simulador-prod.js` fecha las lecturas hacia atrás, por eso la diferencia salta a la vista.
+- **`desde` se sobrescribe en cada repetición:** con `merge: true`, cada lectura fuera de rango vuelve a escribir `desde`, así que deja de ser "desde cuándo" y pasa a ser "la última vez que el servidor la tocó".
+
+**Acción:** que `desde` y `hasta` salgan del mismo reloj (`ts` de la lectura) y que `desde` se escriba solo cuando la alerta se crea (por ejemplo, leyendo el documento antes del batch o con una transacción). Agregar un test en `ingest.test.ts` que procese dos lecturas fuera de rango y verifique que `desde` no cambia. Opcional: guardar la hora del servidor en un campo aparte (`actualizadaEn`).
+
+---
+
+## 3. Formato del umbral con un solo límite (causa confirmada)
+
+**Qué se ve:** "Objetivo —–3000" en conductividad y "Objetivo —–60" en turbidez.
+
+**Causa:** en `web/src/components/TarjetaVariable.tsx`:
+
+```ts
+`Objetivo ${rango.min ?? "—"}${rango.max !== undefined ? `–${rango.max}` : " o más"}`
+```
+
+Si `min` no existe, imprime "—" y luego "–3000".
+
+**Acción:** formatear según los límites presentes, idealmente con una función pura en `lib/tipos.ts` con su test:
+- solo máximo → `≤ 3000`
+- solo mínimo → `≥ 5`
+- ambos → `5–11`
+- ninguno → `Sin umbral definido` (como ya se hace)
+
+---
+
+## 4. Ingest no valida `tempMaxOperacion`
+
+**Qué pasa:** `validarYLimpiarValores` (`functions/src/ingest.ts`) solo compara cada valor con el `min`/`max` de su sonda en `CATALOGO_SONDAS` (`functions/src/types.ts`). El campo `tempMaxOperacion` está declarado (por ejemplo, 60 °C para la `DR-PH01` y la `DR-ECK10.0`, 40 °C para la `DR-TS1`) pero nadie lo revisa.
+
+**Consecuencia:** en las etapas químicas (alcalino a ~76 °C en el retorno, ácido a ~62 °C) se descartan la conductividad (supera 20 000 µS/cm) y las temperaturas de sonda (superan 60 °C), pero el **pH y la turbidez se guardan** como si fueran confiables, aunque la sonda esté trabajando sobre su temperatura máxima de operación. Se aceptó así para el simulador de la demo (`scripts/simulador-cip.js`); el dashboard ya muestra el aviso de "etapa fuera del alcance de monitoreo".
+
+**Propuesta futura:** en vez de descartar el valor, guardarlo con confianza `"fuera_de_operacion"` cuando la temperatura medida en la misma lectura supera la `tempMaxOperacion` de la sonda. Así queda el dato para auditoría, pero no se usa en derivados, umbrales ni indicadores, y el dashboard puede mostrarlo atenuado.
+
+> ✅ **Resuelto en el backend** (9 de octubre de 2026): `validarYLimpiarValores` marca `"fuera_de_operacion"` y, sobre el máximo físico, guarda el tope con `"saturado"` en vez de descartar (ver `modelo-datos-sensores.md`, sección 2.3). Falta mostrarlo en el dashboard (punto 10).
+
+---
+
+## 5. Firmware real del nodo y formato 1.3.x
+
+**Qué falta:** confirmar la versión de firmware del WQS-LB comprado con el uplink de estado (FPort 5) o con `AT+VER`. El decoder solo entiende firmware 1.2.x (flag de 1 byte, formato B); con firmware ≥ 1.3.1 el flag pasa a 2 bytes, el mapa de bits no está documentado y **todas las lecturas se rechazan**.
+
+**Estado:** consulta enviada a Dragino por el formato 1.3.x. Hasta tener respuesta, registrar en `dispositivos/{id}.firmware` la versión real (no suponer "1.2").
+
+> 🟡 **Parcialmente resuelto en el backend:** `ttnUplink` ya procesa el uplink de estado (FPort 5) y guarda `firmwareReportado` en el dispositivo, con un aviso en el log si su familia de formato no coincide con la registrada (ver `modelo-datos-sensores.md`, sección 5.4b). Falta que llegue el primer FPort 5 real: ahí se **confirma la codificación de la versión** (`0x0120` → `1.2.0` es una suposición a partir del ejemplo del manual) y se sabrá si hay que instalar la 1.2.
+
+---
+
+## 6. Modo del gateway Milesight UG65
+
+**Qué falta:** definir si el UG65 trabaja como **reenviador de paquetes** hacia The Things Stack (lo que asume `ttnUplink`: webhook con `frm_payload` y `received_at` en formato TTS) o como **servidor de red propio** (embedded network server). En el segundo caso el formato del webhook cambia y habría que adaptar el adaptador o agregar otro.
+
+---
+
+## 7. Flujómetro SW3L-LB
+
+**Qué falta:** el manual del SW3L-LB-006-AU915 (formato de payload, unidades, intervalo) y verificar que su **rango de caudal y de temperatura** sirva para un CIP (caudales de ~18 m³/h y soluciones a 75–80 °C en el alcalino). Hoy el sistema no lo decodifica: el volumen sigue siendo una estimación con el caudal nominal (`volumenEstimado`, confianza `"estimado"`).
+
+---
+
+## 8. Ubicación de las sondas y calibración
+
+**Qué falta:**
+- **Ubicación física:** la `DR-PH01` y la `DR-ECK1.0` operan hasta **60 °C**. En el retorno del alcalino el líquido llega a ~76 °C y en el ácido a ~62 °C: si las sondas quedan en la línea durante esas etapas, trabajan fuera de su rango de operación (el backend lo marca como `"fuera_de_operacion"`, pero la sonda se puede dañar). Definir con el cliente dónde se instalan (derivación, celda de flujo con válvula, solo en enjuagues).
+- **Soluciones de calibración disponibles localmente:** pH 4,01 / 6,86 / 9,18 y conductividad 1413 µS/cm (dentro del rango de la `DR-ECK1.0`). Confirmar proveedor y procedimiento, y registrar la fecha en `sondas.{id}.ultimaCalibracion`.
+
+---
+
+## 9. Reglas: el operador puede escribir campos del backend en `ciclos`
+
+**Qué pasa:** `firestore.rules` permite al operador actualizar **cualquier** campo de `ciclos/{id}`, incluidos los que solo escribe el backend: `ultimaLectura`, `variablesVistas` e `indicadores*` (y `lecturasConsideradas`, `recalcular`).
+
+**Acción (cuando se definan los permisos del operador):** limitar su `update` con `request.resource.data.diff(resource.data).affectedKeys().hasOnly([...])` a los campos que le correspondan, por ejemplo `etapaActual`, `estado`, `fin` y `consumos`. No se cambió todavía.
+
+---
+
+## 10. Tarjetas del dashboard según las sondas del equipo (propuesta, sin implementar)
+
+**Qué asume hoy el dashboard:** `web/src/app/dashboard/page.tsx` muestra una lista fija de variables (`VISIBLES`, que incluye `turbidez` y `tempExterna`) y del selector de tendencia (`GRAFICABLES`, con `turbidez`), y el aviso de etapa química menciona "turbidez hasta 40 °C". Con el equipo comprado esas tarjetas quedan siempre en "—".
+
+**Propuesta:**
+- **Qué tarjetas mostrar:** las de `ciclos/{id}.variablesVistas.{deviceId}` (ya lo escribe el backend). Solo crece durante el ciclo, así que una variable descartada en una lectura no desaparece de la pantalla; no requiere leer `dispositivos` (solo admin); y una sonda nueva aparece sola.
+- **Estado de cada tarjeta**, desde `ultimaLectura.{deviceId}` (`confianza` y `descartadas` ya se guardan): valor normal; **"≥ 2000"** si está saturada; **atenuada** con "fuera de operación"; o **"Sin dato: <motivo>"** si la última lectura la descartó.
+- **Alertas:** las de `tipo: "saturacion"` mostrarlas como "≥ {max}" en `PanelAlertas` / `HistorialAlertas` (hoy `formatearRango` las mostraría como "≤ {max}").
+- Quitar la mención fija a la turbidez del aviso de etapa química, o mostrarla solo si el equipo la mide.
+
+
+---
+
+## 11. Lecturas en el borde de una etapa (sin implementar)
+
+**Qué pasa:** la ingesta asigna a cada lectura la `etapaActual` que tiene el ciclo al confirmar la transacción, no la etapa en la que se midió. Una lectura tomada al final de una etapa que llega después del cambio (latencia de LoRaWAN, reintento de TTN) queda registrada en la etapa **nueva**, con sus umbrales y sus alertas. Ejemplo: la última muestra del enjuague, con arrastre todavía alto, entra como primera del ácido, o la última del ácido como primera del enjuague final.
+
+**Por qué no se resuelve ahora:** asignar la etapa por la hora de la medición exige un **historial de etapas con horas** (por ejemplo `ciclos/{id}.etapas: [{ etapa, desde, hasta }]` escrito por el operador o el script director) y buscar en él el `ts` de cada lectura. Hoy solo existe `etapaActual`.
+
+**Mitigación actual:** el simulador desfasa los uplinks 5 s del inicio de cada etapa; con equipos reales el riesgo depende del intervalo de envío (`AT+TDC`) y de la latencia de la red.
+
+---
+
+## 12. Tarjeta "Equipo" para el admin (propuesta, sin implementar)
+
+`dispositivos` solo lo lee un admin y `/dashboard` ya es solo para admin. Propuesta: una tarjeta **"Equipo"** por cada dispositivo de la línea, con lo que ya guarda el backend (`firmware`, `firmwareReportado`, `banda`, `subBanda`, `bateriaV`, `estadoRecibidoEn`, `ultimoPing`).
+
+- **Firmware:** el registrado y el reportado. Rojo si son de familias de formato distintas (el equipo no se decodificará bien); ámbar si solo difiere la versión o no hay firmware registrado.
+- **Dos relojes distintos, mostrados por separado:**
+  - **Última señal** = `ultimoPing`: cualquier uplink del equipo (lectura o estado).
+  - **Última medición** = `ts` de `ciclos/{id}.ultimaLectura.{deviceId}`: la última lectura de sondas guardada.
+  - El aviso de **"sin datos"** se basa en la **última medición**, no en `ultimoPing`: un equipo puede seguir enviando su estado cada 12 h (señal viva) y no medir nada. Solo aplica con un ciclo `en_curso` (`ultimaLectura` vive en el ciclo).
+- **Batería:** `bateriaV` con la fecha de `estadoRecibidoEn`. El umbral de alerta hay que sacarlo del manual del WQS-LB (no se conoce todavía).
+- **Campo `alimentacion` en `dispositivos` (`"bateria"` | `"externa"`), sin implementar:** con fuente externa de 3,3 V el voltaje que reporta el equipo **no es de una batería** y no debe alertar con el umbral de batería. La tarjeta lo mostraría como "alimentación externa" y no evaluaría el umbral. Se escribe a mano (Admin SDK, como `sondas`), igual que `firmware`; sin el campo se asume `"bateria"`.
+
+---
+
+## 13. Tope de saturación guardado en cada lectura (mejora futura, sin implementar)
+
+**Contexto (paso 1 del dashboard, tarjetas):** la web necesita el tope de la sonda para escribir "≥ tope". Importar `CATALOGO_SONDAS` desde `functions/src/types.ts` no funciona: `next build` (`output: "export"`, Next 16) no resuelve archivos fuera de `web/` sin cambiar `turbopack.root` / `externalDir`. Por eso hoy hay una **copia** en `web/src/lib/catalogo.ts`, y `catalogo.test.ts` la compara con el original (falla si se desfasan). Además, las tarjetas filtran por las sondas de `dispositivos/{id}.sondas`, de modo que el dashboard (solo admin) lee ese documento; esto matiza lo dicho en el punto 10 ("no requiere leer `dispositivos`").
+
+**Mejora propuesta (opción C):** que `ingest` guarde el tope junto al dato, por ejemplo `ultimaLectura.{deviceId}.topes` (y/o en cada `lecturas/{id}`), con el `max` que ya sale de `CATALOGO_SONDAS` al validar. La web leería el tope del documento y se podría borrar la copia del catálogo y su test.
+
+**Costo:** toca backend y el esquema de las lecturas (campo nuevo, retrocompatible: las lecturas antiguas no lo tienen y la web debería seguir usando el catálogo como respaldo).
+
+---
+
+## 14. Punto ciego: sin temperatura no salta la alerta de umbral de conductividad — PRIORIDAD ALTA
+
+**Resolver antes de la prueba con hardware real.** Hallazgo (14 oct 2026), verificado leyendo el código, sin cambios hechos.
+
+**Qué pasa:**
+- Los umbrales de conductividad (1500 en preenjuague y enjuague, 300 en enjuague final; `seed.js`, `seed-prod.js`) están sobre **`conductividad25C`**, no sobre `conductividad`. `alertasDeLectura` (`ingest.ts`) evalúa `{...numericos, ...derivados}` contra `configuracion/umbrales`.
+- `derivarLectura` (`calculos.ts`) no calcula `conductividad25C` si no hay una temperatura utilizable: ninguna de `tempEc` / `tempSonda` / `tempExterna` con número, o la elegida está saturada o fuera de operación, o la conductividad está fuera de operación. Sin derivado, **no se evalúa ningún umbral de conductividad** y la lectura pasa sin alerta.
+- Sigue funcionando la alerta de **saturación** (`{ciclo}_{etapa}_conductividad_saturacion`): es independiente de la temperatura y de los umbrales. Solo avisa si la sonda topa (2000 µS/cm con la ECK1.0); no cubre, por ejemplo, 1800 µS/cm en el enjuague final.
+- Efecto en `tiempoHastaLimpio`: una lectura sin `conductividad25C` nunca cuenta como limpia. Si ninguna lectura del enjuague final la tiene, el indicador queda vacío; si solo faltan algunas, se calcula con las demás.
+- La web ya lo muestra (tarjeta "sin compensar a 25 °C" con la causa cuando se deduce), pero **no genera alerta**.
+
+**Propuesta, no una decisión del equipo.** Opciones a evaluar:
+- **(a) Alerta "conductividad sin compensar":** cuando hay `conductividad` y no se pudo calcular `conductividad25C` en una etapa monitoreada, disparar una alerta propia (por ejemplo `{ciclo}_{etapa}_conductividad_sin_compensar`, `tipo: "sin_compensar"`, como se hizo con `tipo: "saturacion"`). Avisa que falta información, pero no dice si el valor es alto.
+- **(b) Umbral de respaldo sobre la conductividad cruda:** un umbral por etapa en `configuracion/umbrales` para `conductividad`, que se evalúe solo cuando falta el derivado. Sí detecta valores altos. Ojo: la cruda depende de la temperatura (~2 %/°C), así que el valor de respaldo tendría que elegirse con margen y documentarse como aproximado.
+- (a) y (b) no son excluyentes. Hay que decidir también si la alerta aplica con la conductividad fuera de operación, que hoy no se evalúa por diseño.
+
+---
+
+## 15. `useSondasDispositivo` depende de que el dashboard sea solo admin
+
+El hook (`web/src/hooks/useDatosCip.ts`) lee `dispositivos/{id}` para filtrar las tarjetas por las sondas activas, y las reglas (`firestore.rules`) solo dejan leer `dispositivos` a un admin. Hoy funciona porque `/dashboard` está protegido con `GuardRol roles={["admin"]}`.
+
+**Al habilitar el rol operador**, revisar los permisos de lectura de `dispositivos`: con el mismo hook un operador recibiría `permission-denied`, el hook caería al respaldo (mostrar todo lo visto, sin filtrar por sondas) y volverían las tarjetas de configuraciones antiguas. Opciones: abrir la lectura de `dispositivos` al operador (o de un subconjunto), o resolverlo con el punto 13 (guardar topes y sondas en el ciclo), que evita leer `dispositivos` desde la web.
+
+
+---
+
+## 16. Confirmar si la sonda EC ya compensa la temperatura (`sensorYaCompensa`)
+
+**Qué pasa:** la concentración química (`functions/src/concentracion.ts`, campo `quimica` de cada lectura) compensa la EC a 25 °C con el α de cada químico (NaOH ≈ 0,019). Si la sonda ya entrega la EC compensada, se compensa **dos veces** y la concentración sale mal. Es la misma duda del punto 1, ahora también para este cálculo.
+
+**Cómo se controla:** `concentracionConfig.ts` tiene el flag `sensorYaCompensa` por modelo de sonda (`DR-ECK1.0`, `DR-ECK10.0`, `DR-EC200`), **en `false` por defecto**. Con `true`, κ25 = la EC reportada, sin aplicar la fórmula. Se puede cambiar sin redesplegar en `configuracion/calculos.concentracion.sensorYaCompensa` de Firestore.
+
+**Cómo confirmarlo:**
+- Revisar el manual de Dragino (sección 4.2.2 de la DR-ECK10.0, que dice que compensa con coeficiente 0,02 a 25 °C) y confirmar si el valor que reporta el WQS-LB es el compensado o el crudo; o
+- Prueba de laboratorio: medir **la misma muestra a dos temperaturas** (por ejemplo 25 °C y 40 °C). Si la EC reportada casi no cambia, la sonda ya compensa (`true`); si sube ~2 % por °C, entrega el valor crudo (`false`).
+
+**Decidir junto con el punto 1:** `factorCompensacionEC` de `conductividad25C` (poner 0 si la sonda compensa) y este flag deben quedar coherentes entre sí.
+
+**Además, para validar la concentración con hardware real:** la `DR-ECK1.0` comprada mide hasta 2000 µS/cm y la `DR-ECK10.0` hasta 20 000, mientras que la soda de un CIP (0,5–2 %) está en el orden de 25–100 mS/cm. Solo la `DR-EC200` (hasta 200 mS/cm) cubre ese rango, y el decoder aún no la soporta (firmware ≥ 1.3.1). Además, las sondas ECK operan hasta 60 °C y la soda va a 70–80 °C: esas lecturas quedan `saturado` o `fuera_de_operacion` y la concentración sale `null` con confianza `baja`. Los parámetros m, b y el umbral de agua son valores de ejemplo, a reemplazar por la curva real del proveedor.
+
+
+---
+
+## 17. El umbral de agua de la concentración NO es un criterio de enjuague limpio
+
+**Qué es y qué no es:** `umbralAguaMScm` (5 mS/cm, en `functions/src/concentracionConfig.ts`) solo separa fases: bajo ese valor la fase es "agua" y no se calcula concentración química. **No sirve para decidir que un enjuague quedó limpio**: 5 mS/cm son 5000 µS/cm, unas 25 veces el criterio de limpieza actual (`configuracion/calculos.criterioLimpio.conductividad25C` = 200 µS/cm). Un enjuague a 3000 µS/cm figura como fase "agua" y todavía está lejos de estar limpio.
+
+**Qué falta:** la verificación del enjuague final necesita su propio umbral, cercano a la conductividad del agua de red de la planta. Ese valor **hay que medirlo en la planta** (hoy `conductividadAguaRed` = 150 µS/cm y los 200 y 300 µS/cm de `criterioLimpio` y del umbral de `enjuague_final` son supuestos sin medir). Hasta entonces, la fase "agua" no debe usarse como señal de "enjuague terminado".
+
+**Estado:** no implementado.

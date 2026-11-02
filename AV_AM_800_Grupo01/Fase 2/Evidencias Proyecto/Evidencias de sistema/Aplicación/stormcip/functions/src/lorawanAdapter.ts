@@ -1,9 +1,11 @@
 import { onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
-import { getFirestore } from "firebase-admin/firestore";
-import { decodeWqs, bytesToHex, LecturaTiempoReal } from "./wqsDecoder";
-import { Variable } from "./types";
+import { getFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
+import { decodeWqs, bytesToHex } from "./wqsDecoder";
+import { Dispositivo } from "./types";
 import { procesarLectura } from "./ingest";
+import { mapearAValores } from "./mapeoWqs";
+import { planificarEstado } from "./estadoDispositivo";
 
 /**
  * Secreto del webhook, vía Secret Manager (no una env var plana). En local,
@@ -29,8 +31,11 @@ const ttnWebhookSecret = defineSecret("TTN_WEBHOOK_SECRET");
  * genera el decoder oficial de Dragino en GitHub, que corresponde a firmware
  * 1.1 o anteriores (ver Base de datos/TAREAS-DECODER-WQS.md).
  *
- * Solo procesa FPort=2 (lectura en tiempo real); FPort 3 (datalog) y 5 (estado)
- * se ignoran, igual que antes.
+ * Procesa FPort=2 (lectura en tiempo real) y FPort=5 (estado del dispositivo:
+ * firmware, banda, batería; ver estadoDispositivo.ts). FPort 3 (datalog) y los
+ * demás se ignoran. Cualquier rechazo de negocio responde 200 (con un log) para
+ * que TTS no reintente en bucle; solo el secreto inválido (401) y el método (405)
+ * devuelven error.
  */
 export const ttnUplink = onRequest({ secrets: [ttnWebhookSecret] }, async (req, res) => {
   if (req.method !== "POST") { res.status(405).send("Usar POST"); return; }
@@ -47,6 +52,12 @@ export const ttnUplink = onRequest({ secrets: [ttnWebhookSecret] }, async (req, 
   const fPort = body?.uplink_message?.f_port;
   const frmPayload: string | undefined = body?.uplink_message?.frm_payload;
   const receivedAt: string | undefined = body?.received_at;
+
+  // El estado (FPort 5) no pertenece a un ciclo: no exige ciclo en curso ni crea lectura
+  if (fPort === 5) {
+    await procesarEstado(res, { deviceId, frmPayload, receivedAt });
+    return;
+  }
 
   if (!deviceId || !devEui || fPort !== 2 || !frmPayload) {
     res.status(200).json({ ok: true, ignorado: true, motivo: "sin frm_payload, dev_eui o fport != 2" });
@@ -98,11 +109,15 @@ export const ttnUplink = onRequest({ secrets: [ttnWebhookSecret] }, async (req, 
     return;
   }
 
-  const valoresCrudos = mapearAValores(resultado.datos);
+  const dispositivo = dev.data() as Dispositivo;
+  const valoresCrudos = mapearAValores(resultado.datos, dispositivo.sondas);
 
   const respuesta = await procesarLectura({
-    dev, devRef, cicloId: ciclo.cicloId, etapa: ciclo.etapa, valoresCrudos,
-    ts: tsMs,
+    deviceId,
+    dispositivo,
+    cicloId: ciclo.cicloId,
+    valores: valoresCrudos,
+    ts: Timestamp.fromMillis(tsMs),
     lecturaId: `${devEui}_${Math.floor(tsMs / 1000)}`,
     extra: { hex: bytesToHex(bytes), bateriaV: resultado.datos.bateriaV },
   });
@@ -110,44 +125,78 @@ export const ttnUplink = onRequest({ secrets: [ttnWebhookSecret] }, async (req, 
   // Igual que los demás "ignorados" de arriba: un rechazo de negocio (tipo o
   // rango físico) no debe hacer que TTN reintente en loop. Se responde 200 con
   // un log en vez de propagar el 400/404 de procesarLectura.
-  if (respuesta.status >= 400) {
+  if (!respuesta.ok) {
     console.warn("ttnUplink: procesarLectura rechazó la lectura", {
-      deviceId, status: respuesta.status, body: respuesta.body,
+      deviceId, codigo: respuesta.codigo, error: respuesta.error,
     });
-    res.status(200).json({ ok: true, ignorado: true, motivo: respuesta.body.error });
+    res.status(200).json({ ok: true, ignorado: true, motivo: respuesta.error });
     return;
   }
-  res.status(respuesta.status).json(respuesta.body);
+  // Reintento de TTN de un uplink ya guardado: 200 (no 201) porque no se creó nada
+  if (respuesta.duplicado) {
+    res.status(200).json({ ok: true, duplicado: true, lecturaId: respuesta.lecturaId });
+    return;
+  }
+  res.status(201).json({
+    ok: true, lecturaId: respuesta.lecturaId,
+    alertas: respuesta.alertas, descartadas: respuesta.descartadas,
+  });
 });
 
-// Mapeo fijo para la configuración de sondas de este proyecto: DR-PH01,
-// DR-ECK10.0, DR-TS1 y el DS18B20 externo (ver seed.js). `phTemp` se guarda
-// como la Variable genérica "temperatura" (la que usan los umbrales y el
-// dashboard); `ecTemp` y `tempExterna` son variables propias. No es un mapeo
-// genérico de todos los campos que wqsDecoder puede producir (ORP, DO, EC_K1,
-// formatoInferido no aplican a esta configuración y se ignoran a propósito).
-const CAMPO_A_VARIABLE: Partial<Record<keyof LecturaTiempoReal, Variable>> = {
-  ph: "ph",
-  phTemp: "temperatura",
-  turbidez: "turbidez",
-  ecK10: "conductividad",
-  ecK10Temp: "ecTemp",
-  tempExterna: "tempExterna",
-};
+/**
+ * Uplink de estado (FPort 5). Responde SIEMPRE 200: es un dato informativo que
+ * el equipo repite cada 12 h, y un reintento de TTS no arreglaría nada.
+ *
+ * Guarda en dispositivos/{id}: firmwareReportado, banda, subBanda, bateriaV,
+ * estadoRecibidoEn y ultimoPing. NO toca `firmware`, que es el que usa el
+ * decoder para elegir el formato de FPort 2.
+ */
+async function procesarEstado(
+  res: { status: (c: number) => { json: (b: unknown) => void } },
+  { deviceId, frmPayload, receivedAt }: { deviceId?: string; frmPayload?: string; receivedAt?: string },
+) {
+  const ignorar = (motivo: string) => res.status(200).json({ ok: true, ignorado: true, motivo });
 
-function mapearAValores(datos: LecturaTiempoReal): Record<string, unknown> {
-  const valores: Record<string, unknown> = {};
-  for (const [campo, variable] of Object.entries(CAMPO_A_VARIABLE)) {
-    const valor = (datos as Record<string, unknown>)[campo];
-    if (valor === undefined) continue;
-    valores[variable] = valor;
+  if (!deviceId || !frmPayload) return ignorar("estado sin device_id o frm_payload");
+  try {
+    const devRef = getFirestore().doc(`dispositivos/${deviceId}`);
+    const dev = await devRef.get();
+    if (!dev.exists) return ignorar("dispositivo desconocido");
+
+    const bytes = Buffer.from(frmPayload, "base64");
+    const resultado = decodeWqs(bytes, 5);
+    if (!resultado.ok || resultado.fPort !== 5) {
+      console.warn("ttnUplink: no se pudo decodificar el uplink de estado (FPort 5)", {
+        deviceId, hex: bytesToHex(bytes), error: resultado.ok ? "fPort inesperado" : resultado.error,
+      });
+      return ignorar(resultado.ok ? "fPort inesperado" : resultado.error);
+    }
+
+    const tsMs = receivedAt ? Date.parse(receivedAt) : NaN;
+    const recibidoEn = Number.isNaN(tsMs) ? Timestamp.now() : Timestamp.fromMillis(tsMs);
+    const plan = planificarEstado(resultado.datos, dev.get("firmware") as string | undefined, recibidoEn);
+
+    for (const a of plan.avisos) {
+      const log = a.nivel === "warn" ? console.warn : console.info;
+      log(`ttnUplink: estado de ${deviceId}: ${a.mensaje}`, { deviceId, codigo: a.codigo });
+    }
+    if (!plan.guardar) return ignorar("modelo distinto de WQS-LB");
+
+    await devRef.update({ ...plan.guardar, ultimoPing: FieldValue.serverTimestamp() });
+    res.status(200).json({
+      ok: true, estado: true,
+      firmwareReportado: plan.guardar.firmwareReportado, avisos: plan.avisos.map((a) => a.codigo),
+    });
+  } catch (e) {
+    console.error("ttnUplink: error procesando el uplink de estado", { deviceId, error: String(e) });
+    ignorar("error interno procesando el estado");
   }
-  return valores;
 }
 
 /**
  * El sensor no conoce el ciclo CIP (ver diseño, sección 5.4): se resuelve buscando
- * el ciclo "en_curso" de la línea del dispositivo, y se usa su etapaActual.
+ * el ciclo "en_curso" de la línea del dispositivo. La etapa no se toma aquí:
+ * procesarLectura la lee del ciclo dentro de su transacción.
  */
 async function resolverCicloActivo(db: FirebaseFirestore.Firestore, lineaId: string) {
   const snap = await db.collection("ciclos")
@@ -156,6 +205,5 @@ async function resolverCicloActivo(db: FirebaseFirestore.Firestore, lineaId: str
     .limit(1)
     .get();
   if (snap.empty) return null;
-  const doc = snap.docs[0];
-  return { cicloId: doc.id, etapa: doc.get("etapaActual") as string };
+  return { cicloId: snap.docs[0].id };
 }

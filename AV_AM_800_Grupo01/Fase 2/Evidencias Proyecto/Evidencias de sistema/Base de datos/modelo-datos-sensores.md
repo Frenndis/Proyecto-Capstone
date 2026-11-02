@@ -70,7 +70,24 @@ Dispositivos legado (ej. `esp32-01`) sin campo `sondas` mantienen el comportamie
 ### 2.3 Validación en `ingestLectura` (`functions/src/ingest.ts`)
 Si el dispositivo tiene `sondas` configuradas, además de la validación existente (variable conocida + numérica), se valida:
 1. **Pertenencia**: la variable debe corresponder a alguna de las sondas conectadas a ese `deviceId` (rechaza datos de una variable que ese dispositivo no puede medir).
-2. **Rango físico**: el valor debe estar dentro de `[min, max]` del catálogo para esa sonda (rechaza lecturas imposibles — falla de sensor, cable suelto, etc. — antes de escribirlas en Firestore).
+2. **Rango físico**, contra `[min, max]` del catálogo para esa sonda:
+   - **Bajo el mínimo:** se descarta esa variable (falla de sensor: en las sondas del proyecto el mínimo es un piso físico). El motivo va en la respuesta (`descartadas`) y en el log (`console.warn` con `deviceId`, variable y valor).
+   - **Sobre el máximo**, según el campo `satura` de cada variable en `CATALOGO_SONDAS`:
+     - **Satura** (conductividad, temperaturas de sonda `tempSonda`/`tempEc`, turbidez, ORP, oxígeno disuelto, cloro, COD): el máximo es el tope del rango de medición y el líquido puede superarlo. En el máximo o sobre él se guarda el máximo con `confianza: "saturado"`; el valor real es mayor o igual, así que los derivados calculados con él son **cotas inferiores**.
+     - **No satura** (pH, `tempExterna` del DS18B20): el máximo es el límite de la escala (ningún líquido tiene pH > 14) o el chip no topa. Un valor por encima es falla de sensor y se descarta con motivo, igual que bajo el mínimo; justo en el máximo es válido.
+3. **Temperatura de operación:** si la temperatura de la propia sonda (pH → `tempSonda`, conductividad → `tempEc`; sin temperatura propia, la mayor del líquido) supera su `tempMaxOperacion` o está saturada, la variable se guarda con `confianza: "fuera_de_operacion"` (prevalece sobre `"saturado"`). No entra a derivados, umbrales ni indicadores.
+
+`lecturas/{id}.confianza` y `ultimaLectura.{deviceId}.confianza` traen ahora la confianza de cada variable medida además de la de cada derivado.
+
+**Efecto en los derivados e indicadores de una sonda saturada:**
+- `conductividad25C` sobre una EC saturada (con temperatura válida) se calcula y queda `"saturado"`: el umbral se evalúa sobre esa cota (solo un **máximo** se puede violar con certeza). Con la temperatura saturada o fuera de operación, `conductividad25C` no se calcula.
+- `arrastreQuimico` con la primera lectura saturada queda como cota inferior (`"saturado"`).
+- `tiempoHastaLimpio`: una lectura saturada nunca cuenta como limpia.
+- `pendienteConductividad` se calcula entre la primera y la última lectura **no saturadas**.
+
+**Alerta de saturación:** en las etapas monitoreadas, una variable saturada genera su propia alerta (`alertas/{ciclo}_{etapa}_{variable}_saturacion`, `tipo: "saturacion"`, `max` = tope de la sonda), aparte de la de umbral (`tipo: "umbral"`). Con la conductividad saturada pueden salir las dos a la vez.
+
+**Variables vistas:** `ciclos/{id}.variablesVistas.{deviceId}` acumula (con `arrayUnion`) las variables medidas y derivadas que el dispositivo reportó en el ciclo, incluidas las que alguna vez llegaron con un valor inválido. `ultimaLectura.{deviceId}` guarda además `confianza` y `descartadas` (variable → motivo), y solo se reemplaza si la lectura nueva tiene `ts` mayor o igual al guardado: una lectura atrasada (reintento, datalog) se guarda en `lecturas` y suma a `variablesVistas`, pero no pisa la última ni `etapaActual`. Con eso el dashboard podrá armar tarjetas estables (ver PENDIENTES-DASHBOARD.md).
 
 Esto es una capa distinta de `configuracion/umbrales`: los umbrales son **reglas de proceso** (¿la turbidez es aceptable en esta etapa del ciclo CIP?) mientras que el rango físico es **una cota de hardware** (¿es siquiera posible que la sonda reporte ese valor?). Un valor puede ser válido físicamente y aun así disparar una alerta de proceso.
 
@@ -213,15 +230,44 @@ esa lectura sin umbral y fuera del dashboard. `ecTemp` (de EC_K10) y
 
 Se implementó la segunda alternativa propuesta: `ttnUplink` consulta `ciclos` por `lineaId == dispositivos[deviceId].lineaId` y `estado == "en_curso"` (sin índice compuesto adicional — dos filtros de igualdad no lo requieren en Firestore), y usa el `etapaActual` de ese ciclo. Si no hay ciclo en curso en la línea, el uplink se ignora (200, sin escribir) — no tiene sentido registrar calidad de agua fuera de un ciclo CIP activo. No se agregó el puntero `cicloActivoId` en `dispositivos` para evitar una segunda fuente de verdad.
 
+**Actualización (octubre 2026):** la etapa ya no se toma del ciclo en el adaptador ni del cuerpo del endpoint HTTP: `procesarLectura` lee `etapaActual` **dentro de su transacción**, y la lectura, sus umbrales y el ID de sus alertas usan esa etapa. La ingesta **no escribe** `etapaActual` (antes la reescribía y podía revertir un cambio de etapa concurrente): la escriben solo el operador o el script director (`simulador-cip.js`, `simulador.js`). En el endpoint HTTP, `etapa` en el cuerpo es opcional y se ignora; si difiere de la del ciclo queda un `console.warn`. Limitación: una lectura medida al final de una etapa que llega después del cambio queda en la etapa nueva (PENDIENTES-DASHBOARD.md, punto 11).
+
 **Validado con emuladores**: al cambiar `ciclos/CIP-2026-0001.estado` a `"finalizado"`, el adaptador ignoró correctamente el uplink; al restaurarlo a `"en_curso"`, volvió a procesar y usó el `etapaActual` vigente en ese momento (no un valor fijo).
 
 **FPort 3 (datalog) queda fuera del alcance actual**: `ttnUplink` solo procesa FPort=2. Asignarle a un registro de datalog atrasado "el ciclo en curso ahora" sería incorrecto — el registro corresponde a un momento pasado, que puede ser de otro ciclo o de ningún ciclo. Resolverlo bien requiere asignar el ciclo por ventana de tiempo (ver [sección 7](#7-limitaciones-y-trabajo-futuro)), no por el ciclo activo al momento de recibir el uplink. Además, el firmware 1.3.3 elimina por completo la función de datalog, así que el alcance de esta decisión depende de qué firmware se fije en los equipos reales.
+
+### 5.4b Uplink de estado (FPort 5): firmware real del equipo
+
+`ttnUplink` procesa también el FPort 5 (se envía al unirse a la red y cada 12 horas; manual 2.2.1): modelo (1 byte, `0x3C` = WQS-LB), versión de firmware (2 bytes), banda (1), sub-banda (1) y batería (2 bytes, ÷1000 V). Lo decodifica `decodeWqs` y lo procesa `estadoDispositivo.ts`. **No pertenece a un ciclo**: no exige un ciclo en curso, no crea lecturas y siempre responde 200.
+
+- **Qué guarda** en `dispositivos/{id}`: `firmwareReportado` (ej. `"1.2.0"`), `banda`, `subBanda`, `bateriaV`, `estadoRecibidoEn` (el `received_at` de TTS) y `ultimoPing`. **Nunca** sobrescribe `firmware`: ese lo registra una persona y es el que usa el decoder para elegir el formato de FPort 2.
+- **Modelo distinto de `0x3C`:** `console.warn` y no guarda nada.
+- **Aviso de firmware**, comparando el registrado con el reportado por **familia de formato** (la misma regla de `decodeWqs`: A < 1.2, B 1.2–1.3.0, C ≥ 1.3.1):
+
+| Caso | Aviso |
+|---|---|
+| Familia distinta (ej. registrado `1.2`, el equipo reporta `1.3.3`) | `console.warn` fuerte: *FIRMWARE INCOMPATIBLE… las lecturas se rechazarán o se decodificarán mal; instalar 1.2.x* |
+| Misma familia, versión distinta (ej. `1.2` vs `1.3.0`) | `console.info` informativo |
+| Sin firmware registrado, o no interpretable (`<COMPLETAR>`) | `console.warn`: registrar `firmware` |
+
+- ⚠ **Suposición sin confirmar:** el manual solo da un ejemplo de versión (`0x0100` = v1.0.0). Que `0x0120` signifique `1.2.0` y `0x0133` `1.3.3` (byte bajo = *minor* en el nibble alto, *patch* en el bajo) es una **suposición** a partir de ese ejemplo. Se confirma con el primer FPort 5 real: si el equipo informa una versión distinta de la que muestra `AT+VER`, hay que corregir `decodeFirmwareBytes` en `wqsDecoder.ts`.
 
 ### 5.5 Brechas conocidas para el siguiente sprint
 - No hay cuenta de The Things Stack ni gateway LoRaWAN configurado — nada de esto se pudo probar con hardware real ni con un payload TTN genuino.
 - `TTN_WEBHOOK_SECRET` se lee como variable de entorno simple (`process.env`); antes de producción migrar a Secret Manager (`defineSecret` de `firebase-functions/params`).
 - Falta configurar el webhook real en la consola de TTN una vez se tenga la cuenta y el dispositivo físico.
 - Ver [sección 7](#7-limitaciones-y-trabajo-futuro) para las limitaciones del decoder propio (firmware ≥1.3.1, intervalo de envío, datalog, etc.).
+
+## 5b. Proyección del fin del enjuague
+
+`alCrearLectura` (`functions/src/proyeccionEnjuague.ts`) recalcula, con cada lectura de `enjuague` y `enjuague_final`, cuándo la conductividad llegará al criterio de agua limpia, y lo guarda en `ciclos/{id}.proyeccionEnjuague.{deviceId}`. Solo informa: no cambia el ciclo ni el PLC.
+
+- **Modelo:** `C(t) = Cagua + A·e^(−t/τ)`, ajustado sobre la cola de la curva, con intervalo aproximado al 95 %.
+- **Estados:** `datos_insuficientes`, `sin_criterio`, `no_converge`, `turbidez_pendiente`, `proyectando` y `limpio`.
+- **No informa un plazo** si la caída no es significativa, se estanca, no se ajusta al modelo (R² < 0,9) o el plazo supera 3 veces lo ya observado.
+- **Preenjuague excluido:** usa agua recuperada, que queda sobre la conductividad del agua de red que supone el modelo.
+
+**Límites:** los umbrales se calibraron con el modelo de simulación y hay que revisarlos con ciclos reales. `conductividadAguaRed` y `criterioLimpio` son supuestos, y la proyección hereda la posible doble compensación de temperatura (`PENDIENTES-DASHBOARD.md`, punto 1). Necesita al menos 5 lecturas de la caída: el envío por defecto del WQS-LB (cada 20 min) no alcanza. En la demo: `npm run sim:cip -- --uplink 3`.
 
 ## 6. Pendiente / siguientes pasos
 - Definir umbrales de proceso por etapa para las 4 variables nuevas (orp, oxigenoDisuelto, cloroResidual, cod) junto al cliente (Soprole/Austral Chemicals), igual que se hizo para temperatura/concentración/pH/turbidez.
@@ -243,7 +289,18 @@ Se implementó la segunda alternativa propuesta: `ttnUplink` consulta `ciclos` p
 
 **Proceso CIP y hardware:**
 - El intervalo de envío por defecto (20 minutos) es mucho más largo que la duración de algunas etapas del CIP (minutos): una etapa corta puede terminar sin haber recibido ninguna lectura del WQS-LB. Evaluar si hace falta reconfigurar `AT+TDC` en el equipo real.
-- `DR-ECK10.0` se satura en 20.000 µS/cm; las soluciones de soda cáustica típicas de un CIP alcalino superan ese valor con facilidad. La sonda sirve para detectar cuándo el enjuague volvió a agua limpia (la conductividad cae), **no** para medir la concentración real del químico durante las etapas alcalina/ácida.
+- **Equipo comprado (cotización Altronics COT-2026-1917):** WQS-LB-AU915 con `DR-PH01` y `DR-ECK1.0` (0–2000 µS/cm, resolución 1), sin turbidez ni DS18B20. Es la configuración de `seed.js`, `seed-prod.js` y del simulador.
+- `DR-ECK1.0` se satura en **2000 µS/cm** (la `DR-ECK10.0` en 20.000): las soluciones de soda y ácido de un CIP la saturan siempre, y el inicio de un enjuague también puede hacerlo. La sonda sirve para detectar cuándo el enjuague volvió a agua limpia (la conductividad cae), **no** para medir la concentración del químico. Lo saturado se guarda marcado, no se descarta (ver [sección 2.3](#23-validación-en-ingestlectura-functionssrcingestts)).
+- **Umbral de conductividad del preenjuague y del enjuague: 1500 µS/cm** (antes 3000, imposible de medir con la `DR-ECK1.0`). Queda bajo el tope de la sonda y **supone que la app compensa la temperatura** (la sonda entregaría el valor crudo): hasta ~42 °C, una sonda saturada (≥ 2000 crudo) implica `conductividad25C` > 1500, así que la alerta de saturación y la de umbral no se contradicen. **Si Dragino confirma que la sonda ya compensa** (ver el supuesto de compensación más abajo), hay que revisar este valor.
+- **Umbral de alerta vs. criterio de limpieza (son dos cosas distintas):**
+  - El **umbral de alerta** (`configuracion/umbrales`, por etapa) marca el límite de lo **aceptable**: si una lectura lo cruza se genera una alerta. En `enjuague_final`: `conductividad25C ≤ 300 µS/cm` y `pH 6–8,5` (sin umbral de turbidez: el equipo comprado no la mide).
+  - El **criterio de limpieza** (`configuracion/calculos.criterioLimpio`) marca cuándo el agua está **limpia** y define `tiempoHastaLimpio`. Es más exigente: `conductividad25C ≤ 200 µS/cm` (y `turbidez ≤ 10 NTU` si el equipo tiene `DR-TS1`; sin lecturas de turbidez ese criterio se ignora). Entre 200 y 300 µS/cm el agua es aceptable (sin alerta) pero todavía no limpia.
+  - Antes eran los mismos números (300 µS/cm y 20 NTU): el primer valor que dejaba de alertar ya contaba como limpio, y `tiempoHastaLimpio` no medía nada útil.
+  - El `tiempoHastaLimpio` **global** del ciclo se calcula solo con las lecturas del enjuague final (`calcularIndicadoresCiclo`, `functions/src/ciclos.ts`), desde su primera lectura. Si el enjuague final no tiene lecturas o nunca cumple el criterio, queda sin valor, aunque un enjuague intermedio sí lo haya cumplido. El desglose por etapa conserva el valor de cada etapa.
+- **Umbrales fijos por etapa y arrastre químico:** los umbrales de proceso (`configuracion/umbrales`) valen para toda la etapa, desde el primer segundo. En un ciclo real, el comienzo de cada enjuague todavía trae solución de la etapa química anterior (soda o ácido): la conductividad y el pH de las primeras lecturas superan los umbrales y se dispararía una alerta en **cada** enjuague, aunque el ciclo salga bien. El simulador de la demo (`scripts/simulador-cip.js`, escenario `normal`) lo evita desfasando los uplinks 5 s del inicio de cada etapa, con el arrastre ya evacuado; eso es un ajuste de la demo, no una solución. **Mejora futura (sin implementar):** un período de gracia por etapa (p. ej. `graciaS` en los umbrales) durante el cual las lecturas se guardan pero no generan alertas.
+- **Supuesto sobre la compensación de temperatura de la conductividad (sin verificar):** `derivarLectura` (`functions/src/calculos.ts`) calcula `conductividad25C = EC / (1 + α·(T − 25))`, con `T = tempEc` y `α = factorCompensacionEC` (0,02 por defecto). Es decir, **asume que la EC que entrega el payload viene cruda**, sin compensar. Pero según el manual de Dragino (sección 4.2.2), la `DR-ECK10.0` ya compensa la temperatura internamente (coeficiente 0,02, referencia 25 °C). Si eso aplica al valor que reporta el WQS-LB, la app compensa dos veces: cerca de 25 °C el error es mínimo, pero en un enjuague a 50 °C rondaría el 50 %. El error se propaga a `criterioLimpio`, a los umbrales y alertas sobre `conductividad25C` y a `tiempoHastaLimpio`.
+  - **Cómo verificarlo:** preguntar a Dragino si el registro Modbus que reporta el WQS-LB es conductividad compensada o cruda, o medir con el sensor real la solución patrón de 12,88 mS/cm a una temperatura distinta de 25 °C y ver cuál de los dos valores (EC o `conductividad25C`) coincide.
+  - **Si se confirma que la sonda ya compensa:** basta con poner `factorCompensacionEC: 0` en el documento `configuracion/calculos` de Firestore, sin tocar código. Con α = 0 la fórmula devuelve la EC sin cambios. El cambio solo afecta a las lecturas nuevas: `conductividad25C` se calcula en la ingesta y se guarda en cada lectura, y `scripts/recalcular.js` recalcula los indicadores del ciclo a partir de ese valor guardado, no lo vuelve a derivar.
 - Límites de operación de las sondas (ver [sección 6](#6-pendiente--siguientes-pasos)): el alcance que propone esta arquitectura es monitorear la calidad del agua de enjuague, no las etapas químicas a alta temperatura — falta confirmar con el cliente si eso es suficiente o si esas etapas necesitan otra instrumentación.
 - El rango del DS18B20 externo (-55–125°C, `CATALOGO_SONDAS["DS18B20"]`) es el del datasheet genérico del chip, no una especificación propia de cómo Dragino lo integra/cablea en el WQS-LB.
 
