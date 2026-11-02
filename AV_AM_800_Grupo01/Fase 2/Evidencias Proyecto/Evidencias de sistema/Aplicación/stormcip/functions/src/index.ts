@@ -15,5 +15,5 @@ export { alCerrarCiclo, recalcularIndicadores } from "./ciclos";
 export { alCambiarEstadoProceso } from "./volumenCirculado";
 // Proyección del fin del enjuague: se recalcula con cada lectura (ver proyeccionEnjuague.ts).
 export { alCrearLectura } from "./proyeccionEnjuague";
-// Tiempos sugeridos y consumo esperado por programa (ver modelosCiclo.ts).
-export { alCalcularIndicadores } from "./modelosCiclo";
+// Planta de demostración: ciclo en vivo, decisiones y ciclos diarios (ver planta/).
+export { iniciarCicloDemo, recalcularDecisiones, planificarCiclos } from "./planta/funciones";

@@ -1,56 +1,54 @@
 "use client";
+// Recetas de cada circuito (de la historia de ciclos) y sus límites.
+import { useCiclosPlanta } from "@/hooks/usePlanta";
 import { useConfigCalculos } from "@/hooks/useCiclos";
-import { useUmbrales } from "@/hooks/useDatosCip";
-import { Tarjeta, Vacio } from "@/components/ui/Sala";
-import { ETAPA_LABEL, META, Rango } from "@/lib/tipos";
+import { gsap, useEntrada } from "@/lib/animacion";
+import { CicloPlanta, mmss, nf } from "@/lib/planta";
 
-const rango = (r: Rango) =>
-  r.min !== undefined && r.max !== undefined ? `${r.min} a ${r.max}`
-  : r.max !== undefined ? `máx. ${r.max}` : r.min !== undefined ? `mín. ${r.min}` : "—";
+function Receta({ c }: { c: CicloPlanta }) {
+  const total = c.fases.reduce((a, f) => a + f.sReceta, 0);
+  return (
+    <article className="card pcard">
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+        <div><b style={{ fontSize: 14 }}>{c.circuito}</b><p className="pcard__p" style={{ color: "var(--ink-3)" }}>{c.programa} · {c.lead}</p></div>
+        <b className="mono" style={{ fontSize: 18, whiteSpace: "nowrap" }}>{Math.round(total / 60)} min</b>
+      </div>
+      <div className="fases-r" style={{ display: "flex", gap: 3, marginTop: 12 }}>
+        {c.fases.map((f) => (
+          <div key={f.n} style={{ flex: f.sReceta, minWidth: 0, fontSize: 11.5 }}>
+            <i style={{ display: "block", height: 8, marginBottom: 6, background: f.c > 0.1 ? "#3E8FC7" : "#2A415E" }} />
+            <b style={{ display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontWeight: 600 }} title={f.n}>{f.n}</b>
+            <span className="mono" style={{ color: "var(--ink-3)", display: "block", whiteSpace: "nowrap", overflow: "hidden" }}>{mmss(f.sReceta)}</span>
+            <span className="mono" style={{ color: "var(--ink-3)", display: "block", whiteSpace: "nowrap", overflow: "hidden" }}>{f.t} °C{f.c > 0.1 ? ` · ${nf(f.c, 1)} %` : ""}</span>
+          </div>
+        ))}
+      </div>
+    </article>
+  );
+}
 
 export default function ConfiguracionPage() {
+  const { ciclos, cargando } = useCiclosPlanta(120);
   const cfg = useConfigCalculos();
-  const umbrales = useUmbrales();
-  const filas = Object.entries(umbrales).flatMap(([etapa, vars]) =>
-    Object.entries(vars).map(([v, r]) => ({ etapa, v, r })));
-  const parametros = [
-    ["Conductividad del agua de red", cfg?.conductividadAguaRed, "µS/cm"],
-    ["Criterio de agua limpia", cfg?.criterioLimpio?.conductividad25C, "µS/cm a 25 °C"],
-    ["Caudal nominal", cfg?.caudalNominalM3h, "m³/h"],
-    ["Compensación de temperatura", cfg?.factorCompensacionEC, "por °C"],
-  ] as const;
-
+  const recetas = [...new Map([...ciclos].reverse().map((c) => [c.circuitoId, c])).values()];
+  const raiz = useEntrada<HTMLDivElement>((el) => {
+    gsap.fromTo(el.querySelectorAll(".fases-r i"), { scaleX: 0, transformOrigin: "0 50%" }, { scaleX: 1, duration: 0.7, stagger: 0.012, ease: "power3.out" });
+  }, [recetas.length]);
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      <Tarjeta titulo="Parámetros de cálculo" derecha="supuestos por confirmar con la planta">
-        <table className="sc-table">
-          <tbody>
-            {parametros.map(([k, v, u]) => (
-              <tr key={k}>
-                <td>{k}</td>
-                <td className="num font-semibold">{v ?? "—"}</td>
-                <td className="text-ink-3">{u}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Tarjeta>
-      <Tarjeta titulo="Umbrales de alerta por etapa">
-        {filas.length === 0 ? <Vacio>Sin umbrales configurados.</Vacio> : (
-          <table className="sc-table">
-            <thead><tr><th>Etapa</th><th>Variable</th><th className="text-right">Rango</th></tr></thead>
-            <tbody>
-              {filas.map(({ etapa, v, r }) => (
-                <tr key={`${etapa}-${v}`}>
-                  <td>{ETAPA_LABEL[etapa] ?? etapa}</td>
-                  <td>{META[v]?.label ?? v}</td>
-                  <td className="num">{rango(r)} {META[v]?.unidad}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </Tarjeta>
-    </div>
+    <section className="v" style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 340px", gap: 14, alignItems: "start" }}>
+      <div ref={raiz} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: 14 }}>
+        {cargando ? <p className="pcard__p">Leyendo recetas…</p> : recetas.map((c) => <Receta key={c.circuitoId} c={c} />)}
+      </div>
+      <aside className="card pcard">
+        <p className="pcard__t">Límites de validación</p>
+        <div className="evi">
+          <div><span>Agua limpia</span><b className="mono">≤ {cfg?.criterioLimpio?.conductividad25C ?? 200} µS/cm</b></div>
+          <div><span>Agua de red</span><b className="mono">{cfg?.conductividadAguaRed ?? 150} µS/cm</b></div>
+          <div><span>Velocidad mínima</span><b className="mono">1,5 m/s</b></div>
+          <div><span>Meta de agua diaria</span><b className="mono">{(cfg as { metaAguaDiariaM3?: number } | null)?.metaAguaDiariaM3 ?? 26} m³</b></div>
+        </div>
+        <p className="pcard__p" style={{ marginTop: 12, color: "var(--ink-3)" }}>Recetas y límites de ejemplo. En cada planta se cargan los validados de cada circuito.</p>
+      </aside>
+    </section>
   );
 }

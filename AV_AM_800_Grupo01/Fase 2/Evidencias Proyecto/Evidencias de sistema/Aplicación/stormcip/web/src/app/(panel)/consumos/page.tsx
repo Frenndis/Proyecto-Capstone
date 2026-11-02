@@ -1,74 +1,97 @@
 "use client";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { useCiclosRecientes } from "@/hooks/useCiclos";
-import { FilaKpi, Kpi, Simulado, Tarjeta, Vacio } from "@/components/ui/Sala";
-import { aguaPorDia, consumoPorPrograma } from "@/lib/central";
+import Link from "next/link";
+import { useCiclosPlanta, useOportunidades } from "@/hooks/usePlanta";
+import { useConfigCalculos } from "@/hooks/useCiclos";
+import { Kpi } from "@/components/ui/Kpi";
+import { Ic } from "@/components/ui/Ic";
+import { gsap, useEntrada } from "@/lib/animacion";
+import { aguaPorCircuito, aguaPorDia, nf, periodo, variacion } from "@/lib/planta";
 
-const miles = (n: number, dec = 0) => n.toLocaleString("es-CL", { minimumFractionDigits: dec, maximumFractionDigits: dec });
-const EJE = { fontSize: 10.5, fill: "#8CA1B8", fontFamily: "IBM Plex Mono, monospace" };
+const DIA = 86400000;
+
+function GraficoDia({ datos, meta }: { datos: { dia: Date; m3: number }[]; meta: number }) {
+  const max = Math.max(meta * 1.25, ...datos.map((d) => d.m3), 1);
+  const xx = (i: number) => 40 + (i / (datos.length - 1)) * 700;
+  const yy = (m: number) => 462 - (m / max) * 440;
+  const marcas = [0, 0.25, 0.5, 0.75, 1].map((p) => Math.round(max * p));
+  const ref = useEntrada<SVGSVGElement>((r) => {
+    gsap.fromTo(r.querySelector(".lv-l1"), { drawSVG: "0%" }, { drawSVG: "100%", duration: 1.4, ease: "power2.inOut", delay: 0.2 });
+  }, [datos.length]);
+  return (
+    <svg ref={ref} viewBox="0 0 760 500" role="img" aria-label="Agua de CIP por día, últimos 30 días">
+      {marcas.map((m) => (
+        <g key={m}><line x1={40} x2={740} y1={yy(m)} y2={yy(m)} className="lv-grid" /><text x={32} y={yy(m) + 4} className="lv-tick" textAnchor="end">{m}</text></g>
+      ))}
+      <line x1={40} x2={740} y1={yy(meta)} y2={yy(meta)} className="cons-m" />
+      <polyline points={datos.map((d, i) => `${xx(i).toFixed(1)},${yy(d.m3).toFixed(1)}`).join(" ")} className="lv-l1" fill="none" />
+      {[0, 10, 20, 29].map((i) => datos[i] && (
+        <text key={i} x={xx(i)} y={488} className="lv-tick" textAnchor="middle">{datos[i].dia.toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit" })}</text>
+      ))}
+    </svg>
+  );
+}
 
 export default function ConsumosPage() {
-  const { ciclos, cargando } = useCiclosRecientes();
-  const filas = consumoPorPrograma(ciclos);
-  const dias = aguaPorDia(ciclos, new Date());
-  const t = filas.reduce((s, f) => ({
-    ciclos: s.ciclos + f.ciclos, agua: s.agua + f.aguaM3, soda: s.soda + f.sodaL, acido: s.acido + f.acidoL,
-  }), { ciclos: 0, agua: 0, soda: 0, acido: 0 });
-  const porCiclo = t.ciclos ? (t.agua / t.ciclos) * 1000 : 0;
-  const maxAgua = Math.max(...filas.map((f) => f.aguaM3), 0.001);
+  const { ciclos, cargando } = useCiclosPlanta();
+  const { oportunidades } = useOportunidades();
+  const cfg = useConfigCalculos() as { metaAguaDiariaM3?: number } | null;
+  const ahora = Date.now();
+  const act = periodo(ciclos, ahora - 30 * DIA, ahora + 1);
+  const pre = periodo(ciclos, ahora - 60 * DIA, ahora - 30 * DIA);
+  const vAgua = variacion(act.aguaL, pre.aguaL), vQuim = variacion(act.quimicoL, pre.quimicoL), vHoras = variacion(act.horas, pre.horas);
+  const rank = aguaPorCircuito(ciclos, ahora - 30 * DIA);
+  const maxRank = rank[0]?.m3 ?? 1;
+  const barras = useEntrada<HTMLDivElement>((el) => {
+    gsap.fromTo(el.querySelectorAll(".rk__b i"), { scaleX: 0, transformOrigin: "0 50%" }, { scaleX: 1, duration: 0.6, stagger: 0.06, ease: "power3.out", delay: 0.4 });
+  }, [rank.length]);
+  const fugas = oportunidades?.decisiones.filter((d) => d.tipo === "posible_fuga") ?? [];
+  const t = oportunidades?.totales;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-ink-3">Últimos {ciclos.length} ciclos. Soda y ácido son solución de trabajo estimada, no químico concentrado.</p>
-        {ciclos.some((c) => c.simulado) && <Simulado />}
+    <section className="v v-cons">
+      <div className="kpis">
+        <Kpi l="Agua de CIP · 30 días" v={act.aguaL / 1000} suf=" m³" d={vAgua.texto} tono={vAgua.baja ? "up" : "down"} />
+        <Kpi l="Químico · 30 días" v={act.quimicoL} suf=" L" d={vQuim.texto} tono={vQuim.baja ? "up" : "down"} />
+        <Kpi l="Tiempo de CIP" v={act.horas / 30} dec={1} suf=" h/día" d={vHoras.texto} tono={vHoras.baja ? "up" : "down"} />
+        <Kpi l="Agua por ciclo" v={act.ciclos ? act.aguaL / act.ciclos : 0} suf=" L" d={`${act.ciclos} ciclos`} />
       </div>
-
-      <FilaKpi>
-        <Kpi etiqueta="Agua de red" valor={miles(t.agua, 2)} unidad="m³" detalle={`${t.ciclos} ciclos cerrados`} />
-        <Kpi etiqueta="Agua por ciclo" valor={miles(porCiclo)} unidad="L" detalle="promedio" />
-        <Kpi etiqueta="≈ Soda" valor={miles(t.soda)} unidad="L" detalle="estimado" tono="warn" />
-        <Kpi etiqueta="≈ Ácido" valor={miles(t.acido)} unidad="L" detalle="estimado" tono="warn" />
-      </FilaKpi>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Tarjeta titulo="Agua de red por día · 30 días" derecha="m³">
-          <div className="p-3">
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={dias} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
-                <CartesianGrid stroke="#1D3049" vertical={false} />
-                <XAxis dataKey="dia" tick={EJE} tickLine={false} axisLine={{ stroke: "#2A415E" }} minTickGap={24} />
-                <YAxis tick={EJE} tickLine={false} axisLine={false} />
-                <Tooltip cursor={{ fill: "#12223A" }}
-                  contentStyle={{ background: "#0E1B2E", border: "1px solid #2A415E", borderRadius: 4, fontSize: 12 }}
-                  labelStyle={{ color: "#E8F0F8" }} formatter={(v) => [`${v} m³`, "Agua"]} />
-                <Bar dataKey="aguaM3" fill="#3E8FC7" isAnimationActive={false} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Tarjeta>
-
-        <Tarjeta titulo="Agua por programa" derecha="m³">
-          {filas.length === 0 ? <Vacio>{cargando ? "Leyendo ciclos…" : "Aún no hay ciclos cerrados."}</Vacio> : (
-            <ul className="divide-y divide-line">
-              {filas.map((f) => (
-                <li key={f.clave} className="grid grid-cols-[minmax(0,1fr)_minmax(80px,160px)_56px] items-center gap-3 px-4 py-2.5">
-                  <div className="min-w-0">
-                    <b className="block truncate text-[13px] font-semibold">{f.clave}</b>
-                    <span className="font-mono text-[11px] text-ink-3">
-                      {f.ciclos} ciclos · ≈ {miles(f.sodaL / f.ciclos)} L soda · ≈ {miles(f.acidoL / f.ciclos)} L ácido
-                    </span>
-                  </div>
-                  <span className="h-1.5 rounded-full bg-line">
-                    <span className="block h-full rounded-full bg-brand" style={{ width: `${(f.aguaM3 / maxAgua) * 100}%` }} />
-                  </span>
-                  <span className="text-right font-mono text-[13px] font-semibold tabular-nums">{miles(f.aguaM3, 1)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Tarjeta>
-      </div>
-    </div>
+      <section className="card pcard cons-c">
+        <p className="pcard__t">Agua de CIP por día <span className="lg"><i className="lg-a" />Real <i className="lg-m" />Meta {cfg?.metaAguaDiariaM3 ?? 26} m³</span></p>
+        {cargando ? <p className="pcard__p">Leyendo ciclos…</p> : <GraficoDia datos={aguaPorDia(ciclos, new Date())} meta={cfg?.metaAguaDiariaM3 ?? 26} />}
+      </section>
+      <section className="card pcard cons-r">
+        <p className="pcard__t">Agua por circuito · 30 días <span className="mono">m³</span></p>
+        <div className="rank" ref={barras}>
+          {rank.map((r) => (
+            <div className="rk rk--b" key={r.n}>
+              <span className="rk__n" title={r.n}>{r.n}</span>
+              <span className="rk__b"><i style={{ width: `${(r.m3 / maxRank) * 100}%` }} /></span>
+              <b className="mono">{nf(r.m3)}</b>
+            </div>
+          ))}
+        </div>
+      </section>
+      <aside className="cons-s">
+        {fugas.map((d) => (
+          <section className="card pcard anom" key={d.id}>
+            <p className="pcard__t"><Ic n="alert" /> Posible fuga</p>
+            <b>{d.circuito}</b>
+            <p className="pcard__p">{d.hoy}. {d.porque}</p>
+          </section>
+        ))}
+        {t && (
+          <section className="card pcard case">
+            <p className="pcard__t">Ahorro detectado por Storm CIP</p>
+            <div className="case__big"><b className="mono">{nf(t.aguaMesL / 1000, 1)} m³/mes</b><span>de agua, sin bajar la limpieza</span></div>
+            <dl className="case__dl">
+              <div><dt>Sobre el consumo actual</dt><dd className="mono">{nf((t.aguaMesL / Math.max(t.aguaActualMesL, 1)) * 100)} %</dd></div>
+              <div><dt>Químico</dt><dd className="mono">{nf(t.quimicoMesL)} L/mes</dd></div>
+              <div><dt>Tiempo de planta</dt><dd className="mono">{nf(t.minutosMes / 60, 1)} h/mes</dd></div>
+            </dl>
+            <Link href="/prediccion" className="btn2 btn2--pri" style={{ width: "100%" }}>Ver qué decidir <Ic n="arrow" /></Link>
+          </section>
+        )}
+      </aside>
+    </section>
   );
 }

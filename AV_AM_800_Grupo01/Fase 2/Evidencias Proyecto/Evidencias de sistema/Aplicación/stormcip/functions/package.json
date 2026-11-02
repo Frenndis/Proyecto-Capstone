@@ -14,7 +14,8 @@
   },
   "dependencies": {
     "firebase-admin": "^12.7.0",
-    "firebase-functions": "^6.1.0"
+    "firebase-functions": "^6.1.0",
+    "ml-random-forest": "2.1.0"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.2",

@@ -63,6 +63,16 @@ esté en el `--only`. Por eso, al tocar la región de cualquier función,
 conviene correr `npx tsc --noEmit` y revisar `functions/src/index.ts`
 completo, no solo el archivo de la función que se piensa desplegar.
 
+## Planta de demostración
+
+Storm CIP corre con una planta simulada de 8 circuitos. Todo queda marcado como
+datos de demostración y no reemplaza a los sensores reales.
+
+- `scripts/sembrar-planta.js --prod --project stormcip-austral`: carga 120 días de ciclos simulados, con los que entrenan los modelos.
+- `iniciarCicloDemo`: el botón de Ciclo en vivo corre un ciclo a 20× desde la nube.
+- `planificarCiclos`: cada hora agrega los ciclos programados de la planta.
+- `recalcularDecisiones`: al cerrar un ciclo, reentrena los Random Forest (`planta/ml.ts`) y actualiza la pantalla de Predicción.
+
 ## 1) Solo lectura: comparar qué hay desplegado antes de tocar nada
 
 ```
@@ -131,7 +141,7 @@ paso se aprueba por separado y **no se cambia el orden**:
    valor va **entre comillas** (sin ellas la coma lo parte):
 
    ```
-   firebase deploy --project stormcip-austral --only "functions:ttnUplink,functions:ingestLectura,functions:alCerrarCiclo,functions:recalcularIndicadores,functions:alCambiarEstadoProceso,functions:alCrearLectura,functions:alCalcularIndicadores"
+   firebase deploy --project stormcip-austral --only "functions:ttnUplink,functions:ingestLectura,functions:alCerrarCiclo,functions:recalcularIndicadores,functions:alCambiarEstadoProceso,functions:alCrearLectura,functions:recalcularDecisiones,functions:iniciarCicloDemo,functions:planificarCiclos"
    ```
 
    El `predeploy` compila `functions/` (`npm run build`). Las funciones nuevas

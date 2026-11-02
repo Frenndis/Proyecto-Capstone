@@ -1,109 +1,193 @@
 "use client";
-import { useCiclosRecientes, useModelos } from "@/hooks/useCiclos";
-import ProyeccionEnjuague from "@/components/ProyeccionEnjuague";
-import { Simulado, Tarjeta, Vacio } from "@/components/ui/Sala";
-import { ModeloPrograma, PrediccionConsumo, Recomendacion, ahorroTotalPorCiclo, formatoTiempo } from "@/lib/central";
-import { avisoProyeccion } from "@/lib/proyeccionEnjuague";
-import { ETAPA_LABEL } from "@/lib/tipos";
+// Predicción como decisiones: qué cambiar, cuánto ahorra, por qué, y el botón para resolverlo.
+import { useState } from "react";
+import { registrarDecision, useEstadosDecision, useOportunidades } from "@/hooks/usePlanta";
+import { useAuth } from "@/lib/auth-context";
+import { Ic } from "@/components/ui/Ic";
+import { useConteo, gsap, useEntrada } from "@/lib/animacion";
+import { Decision, EstadoDecision, MetricaModelo, Prediccion, mmss, nf } from "@/lib/planta";
 
-const miles = (n: number, dec = 0) => n.toLocaleString("es-CL", { minimumFractionDigits: dec, maximumFractionDigits: dec });
-
-function textoSinSugerencia(r: Exclude<Recomendacion, { estado: "sugerencia" }>) {
-  switch (r.estado) {
-    case "faltan_ciclos": return `Faltan ciclos: ${r.ciclos} de ${r.requeridos}.`;
-    case "sin_configuracion": return "El ciclo no registra el tiempo configurado de esta etapa.";
-    case "inestable": return `${miles(r.tasaSinLimpiar * 100, 1)} % de los ciclos no llegó a agua limpia: primero hay que estabilizar el proceso.`;
-    case "sin_ahorro": return `Ya usa casi todo su tiempo: el 95 % queda limpio en ${formatoTiempo(r.p95S)}.`;
-  }
-}
-
-function FilaEtapa({ etapa, r }: { etapa: string; r: Recomendacion }) {
+/** Dibuja el tiempo actual, cuándo ya estaba limpio y el tiempo propuesto. */
+function BarraTiempo({ d }: { d: Decision }) {
+  const total = d.configuradoS!;
+  const pos = (s: number) => `${(s / total) * 100}%`;
   return (
-    <tr>
-      <td className="font-medium">{ETAPA_LABEL[etapa] ?? etapa}</td>
-      {r.estado === "sugerencia" ? (
-        <>
-          <td className="num">{formatoTiempo(r.configuradoS)}</td>
-          <td className="num">{formatoTiempo(r.p95S)}</td>
-          <td className="num font-semibold text-accent-ink">{formatoTiempo(r.sugeridoS)}</td>
-          <td className="num">{formatoTiempo(r.siguientePasoS)}</td>
-          <td className="num font-semibold text-ok">{miles(r.ahorroAguaL)} L</td>
-        </>
-      ) : <td colSpan={5} className="whitespace-normal text-ink-3">{textoSinSugerencia(r)}</td>}
-    </tr>
-  );
-}
-
-function CeldaConsumo({ titulo, p, unidad, dec }: { titulo: string; p: PrediccionConsumo; unidad: string; dec: number }) {
-  return (
-    <div className="px-4 py-3">
-      <p className="sc-eyebrow">{titulo}</p>
-      {p.estado === "listo" ? (
-        <>
-          <p className="sc-kpi mt-1 text-warn">≈ {miles(p.esperado, dec)}<span className="ml-1 text-sm font-normal text-ink-3">{unidad}</span></p>
-          <p className="mt-0.5 font-mono text-[11px] text-ink-3">rango {miles(p.p10, dec)} a {miles(p.p90, dec)} · error ± {miles(p.errorMedio, dec)}</p>
-        </>
-      ) : <p className="mt-2 text-sm text-ink-3">Faltan ciclos: {p.ciclos} de {p.requeridos}.</p>}
+    <div className="tb2" role="img" aria-label={`Hoy ${mmss(total)}. Agua limpia en ${mmss(d.p95S!)}. Propuesta ${mmss(d.sugeridoS!)}.`}>
+      <div className="tb2__pista">
+        <div className="tb2__util" style={{ width: pos(d.sugeridoS!) }} />
+        <div className="tb2__ahorro" style={{ left: pos(d.sugeridoS!), right: 0 }} />
+      </div>
+      <div className="tb2__m" style={{ left: pos(d.p95S!), background: "#37C08B" }} />
+      <span className="tb2__l" style={{ left: pos(d.p95S!), transform: "translateX(-100%)", color: "#37C08B", paddingRight: 4 }}>limpio {mmss(d.p95S!)}</span>
+      <span className="tb2__l tb2__l--b" style={{ left: pos(d.sugeridoS!), transform: "none", paddingLeft: 4 }}>propuesta {mmss(d.sugeridoS!)}</span>
+      <span className="tb2__l tb2__l--e" style={{ left: "100%" }}>hoy {mmss(total)}</span>
     </div>
   );
 }
 
-function Programa({ m }: { m: ModeloPrograma }) {
-  const ahorro = ahorroTotalPorCiclo(m);
+const ETIQUETA_IMPACTO = {
+  acortar_enjuague: "de agua al mes", ajustar_dosis: "de químico al mes", posible_fuga: "de agua al mes", revisar_circuito: "por desvíos al mes",
+};
+
+function Tarjeta({ d, estado, puedeDecidir }: { d: Decision; estado?: EstadoDecision; puedeDecidir: boolean }) {
+  const alerta = d.tipo === "revisar_circuito" || d.tipo === "posible_fuga";
+  const aprobada = estado?.estado === "aprobada", descartada = estado?.estado === "descartada";
+  const impacto = d.tipo === "ajustar_dosis" ? `${nf(d.quimicoMesL)} L`
+    : d.tipo === "revisar_circuito" ? `${nf(d.minutosMes)} min` : `${nf(d.aguaMesL / 1000, 1)} m³`;
+  const verbo = alerta ? "Asignar a mantención" : "Aprobar primer paso";
   return (
-    <Tarjeta titulo={`${m.programa} · ${m.lineaId}`}
-      derecha={<span className="flex items-center gap-3">{m.conDatosSimulados && <Simulado />}<span className="font-mono">{m.ciclos} ciclos</span></span>}>
-      <div className="grid gap-px border-b border-line bg-line md:grid-cols-[1.1fr_1fr_1fr_1fr]">
-        <div className="bg-surface px-4 py-3">
-          <p className="sc-eyebrow">Ahorro posible por ciclo</p>
-          <p className="sc-kpi mt-1 text-ok">{miles(ahorro)}<span className="ml-1 text-sm font-normal text-ink-3">L de agua</span></p>
-          <p className="mt-0.5 text-[11px] text-ink-3">a caudal nominal de {m.caudalM3h} m³/h</p>
+    <article className={`card dc${alerta ? " dc--alerta" : ""}${aprobada ? " dc--ok" : ""}${descartada ? " dc--desc" : ""}`}>
+      <div className="dc__top">
+        <div>
+          <h3 className="dc__t">{d.titulo}</h3>
+          <div className="dc__cambio" style={{ marginTop: 6 }}><s>{d.hoy}</s><Ic n="arrow" /><b>{d.propuesta}</b></div>
         </div>
-        <div className="bg-surface"><CeldaConsumo titulo="Agua esperada" p={m.consumo.aguaTotal} unidad="m³" dec={2} /></div>
-        <div className="bg-surface"><CeldaConsumo titulo="Soda esperada" p={m.consumo.soda} unidad="L" dec={0} /></div>
-        <div className="bg-surface"><CeldaConsumo titulo="Ácido esperado" p={m.consumo.acido} unidad="L" dec={0} /></div>
+        <div className="dc__impacto"><b>{impacto}</b><span>{ETIQUETA_IMPACTO[d.tipo]}</span></div>
       </div>
-      <div className="overflow-x-auto">
-        <table className="sc-table">
-          <thead>
-            <tr>
-              <th>Etapa</th><th className="text-right">Configurado</th><th className="text-right">Limpio, 95 % de ciclos</th>
-              <th className="text-right">Tiempo sugerido</th><th className="text-right">Primer paso</th><th className="text-right">Ahorro por ciclo</th>
-            </tr>
-          </thead>
+      {d.configuradoS !== undefined && <BarraTiempo d={d} />}
+      <p className="dc__p">{d.porque} {d.aplicar}</p>
+      <div className="dc__a">
+        {aprobada ? <span className="sc sc--ok"><i /><span>Aprobada{estado?.por ? ` por ${estado.por}` : ""}</span></span>
+          : descartada ? <span className="sc"><i /><span>Descartada</span></span>
+          : puedeDecidir && (
+            <>
+              <button className="btn2 btn2--pri" onClick={() => registrarDecision(d.id, "aprobada")}><Ic n="check" />{verbo}</button>
+              <button className="btn2" onClick={() => registrarDecision(d.id, "descartada")}>Descartar</button>
+            </>
+          )}
+        {(aprobada || descartada) && puedeDecidir && <button className="btn2" onClick={() => registrarDecision(d.id, null)}>Deshacer</button>}
+        <span className="dc__nota">{d.ciclos} ciclos · confianza {d.confianza}</span>
+      </div>
+    </article>
+  );
+}
+
+function Numero({ v, dec = 0, suf, texto }: { v: number; dec?: number; suf: string; texto: string }) {
+  const ref = useConteo(v, (n) => nf(n, dec));
+  return <div className="pr-num"><b><span ref={ref}>0</span><small>{suf}</small></b><p>{texto}</p></div>;
+}
+
+function FilaPrediccion({ p }: { p: Prediccion }) {
+  const m = p.ml;
+  const agua = m?.aguaL ?? p.aguaL, margen = m?.aguaMargen ?? p.aguaError;
+  const riesgo = m ? Math.round(m.riesgo * 100) : null;
+  const final = m?.limpio["Enjuague final"] ?? m?.limpio["Enjuague"];
+  return (
+    <div className="pp">
+      <b title={p.circuito}>{p.circuito}</b><span>{nf(agua)} L</span>
+      <small>≈ {nf(m?.quimicoL ?? p.quimicoL, 1)} L químico{final ? ` · limpio ${mmss(final.s)}` : ""}</small><small>± {nf(margen)} L</small>
+      {riesgo !== null && (
+        <span className="pp__r" style={{ gridColumn: "1 / -1" }}>
+          <i><b style={{ width: `${riesgo}%`, background: riesgo >= 50 ? "var(--crit)" : riesgo >= 25 ? "var(--warn)" : "var(--ok)" }} /></i>
+          <small>riesgo de desvío {riesgo} %</small>
+        </span>
+      )}
+    </div>
+  );
+}
+
+const fmtErr = (m: MetricaModelo, v: number) => (m.id === "riesgo" ? nf(v, 1) : m.unidad === "s" ? `${nf(v)} s` : `${nf(v, m.id === "quimico" ? 1 : 0)} ${m.unidad}`);
+
+/** Qué tan bien predice cada modelo, medido en ciclos que no vio al entrenar. */
+function Modelos({ ml }: { ml: NonNullable<import("@/lib/planta").Oportunidades["ml"]> }) {
+  const principal = ml.metricas.find((m) => m.id === "limpio");
+  return (
+    <section className="card pcard ml-card">
+      <div className="ml-card__h">
+        <div>
+          <p className="pcard__t" style={{ marginBottom: 4 }}>Modelos de machine learning</p>
+          <p className="pcard__p">{ml.algoritmo} de {ml.arboles} árboles, entrenados con {nf(ml.ciclos)} ciclos <b>simulados</b>. Se reentrenan al cerrar cada ciclo y se miden con el 20 % más reciente, que no vieron.</p>
+        </div>
+      </div>
+      <div className="ml-tabla">
+        <table className="ds-t ml-t">
+          <thead><tr><th>Qué predice</th><th>Error del modelo</th><th>Error del promedio</th><th>Mejora</th><th>Estado</th></tr></thead>
           <tbody>
-            {Object.entries(m.etapas).map(([e, r]) => <FilaEtapa key={e} etapa={e} r={r} />)}
+            {ml.metricas.map((m) => (
+              <tr key={m.id}>
+                <td>{m.nombre}</td>
+                <td className="mono">{fmtErr(m, m.error)}</td>
+                <td className="mono">{fmtErr(m, m.errorBase)}</td>
+                <td className="mono">{m.mejora >= 0 ? "+" : ""}{nf(m.mejora * 100)} %</td>
+                <td><span className={`st st--${m.util ? "ok" : "warn"}`}><i />{m.util ? "En uso" : "No supera la base"}</span></td>
+              </tr>
+            ))}
           </tbody>
         </table>
+        {principal && (
+          <div className="ml-fact">
+            <p className="kpi__l" style={{ marginBottom: 8 }}>Lo que más alarga un enjuague</p>
+            {principal.factores.map((f) => (
+              <div className="ml-f" key={f.n}><span>{f.n}</span><i><b style={{ width: `${f.peso * 100}%` }} /></i><em className="mono">{nf(f.peso * 100)} %</em></div>
+            ))}
+          </div>
+        )}
       </div>
-    </Tarjeta>
+    </section>
   );
 }
 
 export default function PrediccionPage() {
-  const { modelos, cargando } = useModelos();
-  const { ciclos } = useCiclosRecientes(20);
-  const programas = Object.values(modelos).filter((m) => m?.etapas);
-  const enCurso = ciclos.find((c) => c.estado === "en_curso");
-  const equipo = Object.keys(enCurso?.proyeccionEnjuague ?? {})[0];
-  const aviso = avisoProyeccion(enCurso, equipo, !!enCurso);
+  const { oportunidades: o, cargando } = useOportunidades();
+  const estados = useEstadosDecision();
+  const { rol } = useAuth();
+  const [todas, setTodas] = useState(false);
+  const raiz = useEntrada<HTMLElement>((el) => {
+    gsap.fromTo(el.querySelectorAll(".dc"), { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.45, stagger: 0.06, ease: "power3.out", delay: 0.2 });
+  }, [cargando]);
+
+  if (!o) return <section className="v"><p className="card pcard pcard__p">{cargando ? "Calculando decisiones…" : "Las decisiones aparecen cuando la planta tenga ciclos cerrados."}</p></section>;
+
+  const atender = o.decisiones.filter((d) => d.tipo === "posible_fuga" || d.tipo === "revisar_circuito");
+  const ahorros = o.decisiones.filter((d) => !atender.includes(d));
+  const pendientes = ahorros.filter((d) => !estados[d.id] || estados[d.id].estado === "pendiente" as never);
+  const aprobadas = o.decisiones.filter((d) => estados[d.id]?.estado === "aprobada");
+  const aguaAprobada = aprobadas.reduce((s, d) => s + d.aguaMesL, 0);
+  const t = o.totales;
+  const pct = (t.aguaMesL / Math.max(t.aguaActualMesL, 1)) * 100;
+  const puede = rol === "admin";
+  const visibles = todas ? ahorros : ahorros.slice(0, 6);
 
   return (
-    <div className="space-y-4">
-      <ProyeccionEnjuague aviso={aviso} />
+    <section className="v v-pred" ref={raiz}>
+      <div className="card pr-hero">
+        <div>
+          <p className="pr-hero__t">Si apruebas todo, la planta deja de gastar <b>{nf(t.aguaMesL / 1000, 1)} m³ de agua al mes</b>, sin bajar la limpieza.</p>
+          <p className="pr-hero__s">Es {nf(pct)} % del agua de CIP. Tienes {pendientes.length} cambios por decidir{aprobadas.length ? ` y ${aprobadas.length} ya ${aprobadas.length === 1 ? "aprobado" : "aprobados"} (${nf(aguaAprobada / 1000, 1)} m³/mes)` : ""}.</p>
+        </div>
+        <Numero v={t.aguaMesL / 1000} dec={1} suf=" m³/mes" texto="agua que se puede ahorrar" />
+        <Numero v={t.quimicoMesL} suf=" L/mes" texto="químico que se puede ahorrar" />
+        <Numero v={t.minutosMes / 60} dec={1} suf=" h/mes" texto="de planta disponible" />
+      </div>
 
-      {programas.length === 0
-        ? <Tarjeta><Vacio>{cargando ? "Leyendo modelos…" : "Los modelos aparecen cuando cierra el primer ciclo de un programa."}</Vacio></Tarjeta>
-        : programas.map((m) => <Programa key={`${m.lineaId}-${m.programa}`} m={m} />)}
+      {o.ml && <Modelos ml={o.ml} />}
 
-      <Tarjeta titulo="Cómo leer esta pantalla">
-        <ul className="max-w-3xl list-disc space-y-1.5 py-3 pl-8 pr-4 text-[13px] text-ink-2">
-          <li>El tiempo sugerido es el percentil 95 del tiempo hasta agua limpia, más 10 % de margen. Nunca baja de la mitad de lo configurado.</li>
-          <li>Se aplica por pasos, con un máximo de 10 % en cada cambio, verificando la limpieza antes del siguiente.</li>
-          <li>Son recomendaciones: calidad aprueba cada cambio y Storm CIP no modifica la receta ni el PLC.</li>
-          <li>Solo cubre los enjuagues. Las etapas con químicos necesitan validación de higiene y sensores aptos para esas condiciones.</li>
-        </ul>
-      </Tarjeta>
-    </div>
+      <div className="pr-lista">
+        {atender.length > 0 && <p className="pr-grupo">Atender primero · {atender.length}</p>}
+        {atender.map((d) => <Tarjeta key={d.id} d={d} estado={estados[d.id]} puedeDecidir={puede} />)}
+        <p className="pr-grupo">Para ahorrar · de mayor a menor impacto</p>
+        {visibles.map((d) => <Tarjeta key={d.id} d={d} estado={estados[d.id]} puedeDecidir={puede} />)}
+        {ahorros.length > 6 && <button className="btn2" onClick={() => setTodas(!todas)}>{todas ? "Ver menos" : `Ver las ${ahorros.length} recomendaciones`}</button>}
+      </div>
+
+      <aside className="pr-side">
+        <section className="card pcard">
+          <p className="pcard__t">Modelo: próximo ciclo <span className="mono">agua</span></p>
+          {o.predicciones.map((p) => <FilaPrediccion key={p.circuitoId} p={p} />)}
+          <p className="pcard__p" style={{ marginTop: 10, color: "var(--ink-3)", fontSize: 11.5 }}>Predicción del modelo para el próximo ciclo de cada circuito. «±» cubre cerca de 9 de cada 10 ciclos que no vio.</p>
+        </section>
+        <section className="card pcard">
+          <p className="pcard__t">Cómo se decide</p>
+          <ol className="rel">
+            {[["Aprende de cada ciclo", "Carga, horas sin limpiar, agua y vapor, contra cuándo llegó a agua limpia."],
+              ["Predice con margen", "Nunca sugiere menos que el 95 % de lo medido."],
+              ["Baja por pasos", "Máximo 10 % por cambio, verificando la limpieza antes de seguir."],
+              ["Calidad aprueba", "Storm CIP registra la decisión. No cambia la receta ni el PLC."]].map(([a, b]) => (
+                <li className="is-done" key={a}><i /><div><b>{a}</b><p>{b}</p></div></li>
+            ))}
+          </ol>
+        </section>
+      </aside>
+    </section>
   );
 }
