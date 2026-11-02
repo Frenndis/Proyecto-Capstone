@@ -1,9 +1,8 @@
 "use client";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
-import GuardRol from "@/components/layout/GuardRol";
 import {
-  useAlertas, useCicloMostrado, useHistorialAlertas, useLecturas, useSondasDispositivo,
+  useAlertas, useCicloMostrado, useLecturas, useSondasDispositivo,
   useUmbrales, ultimaLecturaReciente,
 } from "@/hooks/useDatosCip";
 import { useEstadoProceso } from "@/hooks/useEstadoProceso";
@@ -22,7 +21,7 @@ import { useSeleccionLinea } from "@/hooks/useSeleccionLinea";
 import { ETIQUETA_SELECCION, SELECCIONES, SeleccionLinea, lineaDe } from "@/lib/lineas";
 import GraficoTendencia from "@/components/GraficoTendencia";
 import PanelAlertas from "@/components/PanelAlertas";
-import HistorialAlertas from "@/components/HistorialAlertas";
+import { Simulado } from "@/components/ui/Sala";
 import IndicadoresCiclo from "@/components/IndicadoresCiclo";
 import { ETAPAS_MONITOREADAS, ETAPA_LABEL, META } from "@/lib/tipos";
 import { estadoTarjeta, variablesAMostrar } from "@/lib/tarjetas";
@@ -42,24 +41,18 @@ const SIN_TARJETA = ["conductividad25C", "tempEc"];
 // historial que acumula useHistorialPlanta (ver VARIABLES_DE_PLANTA).
 const GRAFICABLES = ["conductividad25C", "conductividad", "turbidez", "ph", "concentracion", "tempEc"];
 
-// Por ahora solo admin. Cuando se definan los permisos de operador, se agrega
-// aquí y se limitan las funciones dentro del dashboard según `rol`.
+// Todos los roles ven el ciclo; las reglas de Firestore limitan lo que cada uno escribe.
 export default function DashboardPage() {
-  return (
-    <GuardRol roles={["admin"]}>
-      <Dashboard />
-    </GuardRol>
-  );
+  return <Dashboard />;
 }
 
 function Dashboard() {
-  const { user, rol, salir } = useAuth();
+  const { user, rol } = useAuth();
   // Línea que se muestra (recordada en el navegador)
   const [seleccion, elegirLinea] = useSeleccionLinea();
   const { ciclo, enVivo, cargando: cargandoCiclo } = useCicloMostrado(lineaDe(seleccion));
   const lecturas = useLecturas(ciclo?.id);
   const alertas = useAlertas();
-  const historialAlertas = useHistorialAlertas();
   const umbrales = useUmbrales();
   const [grafico, setGrafico] = useState("conductividad25C");
   const reciente = ultimaLecturaReciente(ciclo?.ultimaLectura);
@@ -97,48 +90,36 @@ function Dashboard() {
   const finMs = ciclo?.fin?.toDate ? ciclo.fin.toDate().getTime() : Math.floor(ahora / 5000) * 5000;
   const etapaFueraDeAlcance = enVivo && etapa !== "" && !ETAPAS_MONITOREADAS.includes(etapa);
 
+  const aviso = avisoProyeccion(ciclo, deviceId, enVivo);
+
   return (
-    <main className="mx-auto max-w-5xl space-y-6 p-6">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold">
-            StormCIP · {enVivo ? "Monitoreo en vivo" : "Último ciclo cerrado"}
-          </h1>
-          <p className="text-sm text-slate-500">{user.email} · rol: {rol ?? "sin rol"}</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-sm">
-            Línea
-            <select value={seleccion} onChange={(e) => elegirLinea(e.target.value as SeleccionLinea)}
-              className="rounded-md border px-2 py-1 text-sm dark:bg-slate-900">
-              {SELECCIONES.map((sel) => <option key={sel} value={sel}>{ETIQUETA_SELECCION[sel]}</option>)}
-            </select>
-          </label>
-          <button onClick={salir} className="rounded-lg border px-3 py-1 text-sm">Salir</button>
-        </div>
-      </header>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-ink-3">{enVivo ? "Monitoreo en vivo" : "Último ciclo cerrado"}</p>
+        <label className="flex items-center gap-2 text-[13px] text-ink-2">
+          Línea
+          <select value={seleccion} onChange={(e) => elegirLinea(e.target.value as SeleccionLinea)}
+            className="rounded-ctrl border border-line-2 px-2 py-1 text-[13px]">
+            {SELECCIONES.map((sel) => <option key={sel} value={sel}>{ETIQUETA_SELECCION[sel]}</option>)}
+          </select>
+        </label>
+      </div>
 
-      {/* Solo el rol admin llega aquí (GuardRol) y las reglas también lo exigen */}
-      {seleccion !== "real" && <ControlSimulacion />}
-
-      {cargandoCiclo ? <p className="text-slate-500">Buscando ciclo…</p>
-       : !ciclo ? <p className="rounded-lg border border-dashed p-6 text-slate-500">
-            No hay ciclos en curso ni cerrados. Ejecuta el seed y el simulador.</p>
+      {cargandoCiclo ? <p className="text-ink-3">Buscando ciclo…</p>
+       : !ciclo ? <p className="sc-card p-8 text-center text-ink-3">No hay ciclos en curso ni cerrados en esta línea.</p>
        : <>
-        <section className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-          <div className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
-            <span><b>Ciclo:</b> {ciclo.id}</span>
-            <span><b>Línea:</b> {ciclo.lineaId}</span>
-            <span><b>Camión:</b> {ciclo.camion}</span>
-            <span><b>Etapa:</b> {ETAPA_LABEL[etapa] ?? etapa}</span>
-            <span><b>Estado:</b> {ciclo.estado}</span>
-            {deviceId && <span><b>Equipo:</b> {deviceId}</span>}
-            <span><b>Inicio:</b> {ciclo.inicio?.toDate
-              ? ciclo.inicio.toDate().toLocaleTimeString("es-CL") : "—"}</span>
-            {ciclo.fin?.toDate && (
-              <span><b>Fin:</b> {ciclo.fin.toDate().toLocaleTimeString("es-CL")}</span>
-            )}
-          </div>
+        <section className="sc-card flex flex-wrap items-center gap-x-8 gap-y-1.5 px-4 py-2.5 text-[12.5px]">
+          <span><span className="text-ink-3">Ciclo </span><b className="font-mono font-semibold text-accent-ink">{ciclo.id}</b></span>
+          <span><span className="text-ink-3">Línea </span><b className="font-mono font-medium">{ciclo.lineaId}</b></span>
+          <span><span className="text-ink-3">Programa </span>{ciclo.programa}</span>
+          <span><span className="text-ink-3">Camión </span><b className="font-mono font-medium">{ciclo.camion}</b></span>
+          {deviceId && <span><span className="text-ink-3">Equipo </span><b className="font-mono font-medium">{deviceId}</b></span>}
+          <span><span className="text-ink-3">Inicio </span><b className="font-mono font-medium">{ciclo.inicio?.toDate
+            ? ciclo.inicio.toDate().toLocaleTimeString("es-CL") : "—"}</b></span>
+          {ciclo.fin?.toDate && (
+            <span><span className="text-ink-3">Fin </span><b className="font-mono font-medium">{ciclo.fin.toDate().toLocaleTimeString("es-CL")}</b></span>
+          )}
+          {ciclo.simulado && <span className="ml-auto"><Simulado /></span>}
         </section>
 
         <BarraEtapas ciclo={ciclo} proceso={proceso} detenido={detenido} ahora={ahora} />
@@ -146,9 +127,7 @@ function Dashboard() {
         {/* Sin este aviso, las tarjetas y la tendencia de un ciclo ya cerrado se
             leen como si fueran datos de ahora. */}
         {!enVivo && (
-          <p className="rounded-lg border border-slate-300 bg-slate-50 p-3 text-sm
-                        text-slate-600 dark:border-slate-600 dark:bg-slate-800/40
-                        dark:text-slate-300">
+          <p className="sc-card p-3 text-[13px] text-ink-2">
             No hay ciclos en curso. Se muestra el último ciclo cerrado: las tarjetas y
             la tendencia son sus lecturas finales, no datos en vivo.
           </p>
@@ -157,70 +136,71 @@ function Dashboard() {
         {/* Honestidad sobre el alcance: en etapas químicas las sondas están fuera
             de su rango de operación y no se debe confiar en el dato. */}
         {etapaFueraDeAlcance && (
-          <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm
-                        text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+          <p className="rounded-card border border-warn/60 bg-warn/10 p-3 text-[13px] text-warn">
             Etapa fuera del alcance de monitoreo: las sondas WQS operan hasta 60 °C
             {variables.includes("turbidez") && " (turbidez hasta 40 °C)"}. Los valores
             mostrados no son confiables en esta etapa.
           </p>
         )}
 
-        <section className="grid grid-cols-2 gap-3 md:grid-cols-3">
-          {cargandoSondas ? <p className="col-span-full text-sm text-slate-500">Leyendo equipo…</p>
-           : <>
-              {variables.length === 0 && (
-                <p className="col-span-full rounded-lg border border-dashed p-4 text-sm text-slate-500">
-                  El equipo aún no reporta variables en este ciclo.</p>
-              )}
-              {tarjetas.map((v) => (
-                <TarjetaSonda key={v} variable={v} rango={rangos[v]}
-                  estado={estadoTarjeta(v, lectura, sondas)} />
-              ))}
-              <TarjetaSonda variable="caudal" estado={estadoCaudal} />
-              <TarjetaSonda variable="concentracion" rango={rangos.concentracion}
-                estado={estadoConcentracion} />
-            </>}
-        </section>
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="min-w-0 space-y-4">
+            <section className="grid grid-cols-2 gap-3 md:grid-cols-3">
+              {cargandoSondas ? <p className="col-span-full text-sm text-ink-3">Leyendo equipo…</p>
+               : <>
+                  {variables.length === 0 && (
+                    <p className="sc-card col-span-full p-4 text-sm text-ink-3">
+                      El equipo aún no reporta variables en este ciclo.</p>
+                  )}
+                  {tarjetas.map((v) => (
+                    <TarjetaSonda key={v} variable={v} rango={rangos[v]}
+                      estado={estadoTarjeta(v, lectura, sondas)} />
+                  ))}
+                  <TarjetaSonda variable="caudal" estado={estadoCaudal} />
+                  <TarjetaSonda variable="concentracion" rango={rangos.concentracion}
+                    estado={estadoConcentracion} />
+                </>}
+            </section>
 
-        <PanelesProceso cicloId={ciclo.id} proceso={proceso} cargando={cargandoProceso}
-          detenido={detenido} />
+            <section className="sc-card p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="sc-eyebrow">Tendencia</h2>
+                <select value={graficoActual ?? ""} onChange={(e) => setGrafico(e.target.value)}
+                  className="rounded-ctrl border border-line-2 px-2 py-1 text-[13px]">
+                  {graficables.map((v) => <option key={v} value={v}>{META[v].label}</option>)}
+                </select>
+              </div>
+              {graficoActual
+                ? <GraficoTendencia
+                    lecturas={VARIABLES_DE_PLANTA.includes(graficoActual) ? historialPlanta : lecturas}
+                    variable={graficoActual} rango={rangos[graficoActual]}
+                    inicioMs={inicioMs} finMs={finMs} etapaActual={etapa} />
+                : <p className="text-sm text-ink-3">Sin variables graficables todavía.</p>}
+              <p className="mt-2 text-xs text-ink-3">
+                {lecturas.length} lectura{lecturas.length === 1 ? "" : "s"} del ciclo, desde su inicio.
+              </p>
+            </section>
 
-        <ProyeccionEnjuague aviso={avisoProyeccion(ciclo, deviceId, enVivo)} />
+            <VolumenCirculado estado={volumen} />
 
-        <VolumenCirculado estado={volumen} />
-
-        <section className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="font-medium">Tendencia</h2>
-            <select value={graficoActual ?? ""} onChange={(e) => setGrafico(e.target.value)}
-              className="rounded-md border px-2 py-1 text-sm dark:bg-slate-900">
-              {graficables.map((v) => <option key={v} value={v}>{META[v].label}</option>)}
-            </select>
+            {/* Los indicadores los calcula el backend al cerrar el ciclo (derivarCiclo) */}
+            <IndicadoresCiclo ciclo={ciclo} />
           </div>
-          {graficoActual
-            ? <GraficoTendencia
-                lecturas={VARIABLES_DE_PLANTA.includes(graficoActual) ? historialPlanta : lecturas}
-                variable={graficoActual} rango={rangos[graficoActual]}
-                inicioMs={inicioMs} finMs={finMs} etapaActual={etapa} />
-            : <p className="text-sm text-slate-500">Sin variables graficables todavía.</p>}
-          <p className="mt-2 text-xs text-slate-500">
-            {lecturas.length} lectura{lecturas.length === 1 ? "" : "s"} del ciclo, desde su inicio.
-          </p>
-        </section>
 
-        {/* Los indicadores los calcula el backend al cerrar el ciclo (derivarCiclo) */}
-        <IndicadoresCiclo ciclo={ciclo} />
+          <aside className="min-w-0 space-y-4">
+            <ProyeccionEnjuague aviso={aviso} />
+            <PanelesProceso cicloId={ciclo.id} proceso={proceso} cargando={cargandoProceso}
+              detenido={detenido} />
+            <section className="sc-card p-4">
+              <h2 className="sc-eyebrow mb-3">Alertas activas</h2>
+              <PanelAlertas alertas={alertas} />
+            </section>
+            {/* Solo el rol admin puede dar órdenes: las reglas también lo exigen */}
+            {seleccion !== "real" && rol === "admin" && <ControlSimulacion />}
+          </aside>
+        </div>
        </>}
-
-      <section className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-        <h2 className="mb-3 font-medium">Alertas activas</h2>
-        <PanelAlertas alertas={alertas} />
-      </section>
-
-      <section className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-        <h2 className="mb-3 font-medium">Historial de alertas</h2>
-        <HistorialAlertas alertas={historialAlertas} />
-      </section>
-    </main>
+      {!ciclo && !cargandoCiclo && seleccion !== "real" && rol === "admin" && <ControlSimulacion />}
+    </div>
   );
 }

@@ -32,7 +32,9 @@ export function avisoProyeccion(
     case "proyectando":
       return {
         tono: "estimado",
-        titulo: `≈ ${formatearDuracion(p.restanteS ?? 0)} para agua limpia`,
+        titulo: (p.restanteS ?? 0) > 0
+          ? `≈ ${formatearDuracion(p.restanteS ?? 0)} para agua limpia`
+          : "≈ A punto de llegar a agua limpia",
         detalle: `${etapa}: entre ${formatearDuracion(p.restanteMinS ?? 0)} y ${formatearDuracion(p.restanteMaxS ?? 0)}, ` +
           `según ${p.muestras} lecturas. ${p.metodo ?? ""}`.trim(),
       };

@@ -235,7 +235,8 @@ export function documentoProyeccion(etapa: Etapa, calculadaSobre: Timestamp, r: 
  */
 export const alCrearLectura = onDocumentCreated("ciclos/{cicloId}/lecturas/{lecturaId}", async (event) => {
   const d = event.data?.data();
-  if (!d || !ETAPAS_PROYECCION.includes(d.etapa) || !muestraDeLectura(d)) return;
+  // Una lectura histórica (generar-historial.js) ya pasó: no hay nada que proyectar
+  if (!d || d.historico || !ETAPAS_PROYECCION.includes(d.etapa) || !muestraDeLectura(d)) return;
 
   const db = getFirestore();
   const cicloRef = db.doc(`ciclos/${event.params.cicloId}`);

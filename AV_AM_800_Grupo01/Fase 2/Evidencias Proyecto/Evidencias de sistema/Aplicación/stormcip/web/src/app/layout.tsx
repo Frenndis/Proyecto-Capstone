@@ -3,7 +3,7 @@ import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 
 export const metadata: Metadata = {
-  title: "StormCIP",
+  title: "Storm CIP · Austral Chemicals",
   description: "Monitoreo IoT de procesos de limpieza CIP",
 };
 

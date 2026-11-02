@@ -16,9 +16,6 @@
       "fields": [{ "fieldPath": "etapa", "order": "ASCENDING" },
                  { "fieldPath": "ts", "order": "ASCENDING" }] },
 
-    { "_comentario": "COLLECTION_GROUP: histórico entre ciclos (Sprint 5 + dataset ML). Un orderBy('ts') sobre collectionGroup('lecturas') NO usa índice automático: los single-field solo se crean solos en scope COLLECTION.",
-      "collectionGroup": "lecturas", "queryScope": "COLLECTION_GROUP",
-      "fields": [{ "fieldPath": "ts", "order": "DESCENDING" }] },
     { "collectionGroup": "lecturas", "queryScope": "COLLECTION_GROUP",
       "fields": [{ "fieldPath": "etapa", "order": "ASCENDING" },
                  { "fieldPath": "ts", "order": "DESCENDING" }] },
@@ -26,5 +23,13 @@
       "fields": [{ "fieldPath": "deviceId", "order": "ASCENDING" },
                  { "fieldPath": "ts", "order": "DESCENDING" }] }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    { "collectionGroup": "lecturas", "fieldPath": "ts", "indexes": [
+      { "order": "ASCENDING", "queryScope": "COLLECTION" },
+      { "order": "DESCENDING", "queryScope": "COLLECTION" },
+      { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" },
+      { "order": "DESCENDING", "queryScope": "COLLECTION_GROUP" }
+    ] },
+    { "collectionGroup": "eventosVolumen", "fieldPath": "expiraEn", "ttl": true, "indexes": [] }
+  ]
 }

@@ -9,7 +9,7 @@
 //    la forma de uso anterior, `$env:PROJECT_ID = "stormcip-972bd"`).
 const { PROJECT_ID } = require("./config");
 
-const PROYECTO_PROD = "stormcip-972bd";
+const PROYECTO_PROD = "stormcip-austral";
 
 const salir = (msg) => { console.error(msg); process.exit(1); };
 

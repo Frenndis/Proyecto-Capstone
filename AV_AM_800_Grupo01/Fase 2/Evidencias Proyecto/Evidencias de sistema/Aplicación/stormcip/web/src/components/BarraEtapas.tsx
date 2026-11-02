@@ -11,18 +11,18 @@ type CicloBarra = {
 
 function Tiempo({ etiqueta, segundos }: { etiqueta: string; segundos: number | null }) {
   return (
-    <span><b>{etiqueta}:</b>{" "}
-      {segundos === null
-        ? <span className="text-slate-500">sin dato</span>
-        : <span className="tabular-nums">{formatearDuracion(segundos)}</span>}
-    </span>
+    <div>
+      <p className="sc-eyebrow">{etiqueta}</p>
+      <p className="mt-0.5 font-mono text-[15px] font-semibold tabular-nums">
+        {segundos === null ? <span className="text-sm font-normal text-ink-3">sin dato</span> : formatearDuracion(segundos)}
+      </p>
+    </div>
   );
 }
 
-// Etapas del ciclo con el cronómetro. El tiempo transcurrido del ciclo sale de su
+// Fases del ciclo con el cronómetro. El tiempo transcurrido del ciclo sale de su
 // inicio; el tiempo en la etapa y el restante, solo de estadoProceso (el ciclo no
-// guarda cuándo empezó ni cuánto dura cada etapa). Sin estado de planta vigente:
-// "sin dato".
+// guarda cuándo empezó cada etapa). Sin estado de planta vigente: "sin dato".
 export default function BarraEtapas({
   ciclo, proceso, detenido, ahora,
 }: {
@@ -36,27 +36,22 @@ export default function BarraEtapas({
   const enCurso = ciclo.estado === "en_curso";
 
   return (
-    <section className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-      <ol className="flex flex-wrap items-center gap-2 text-xs">
-        {etapas.map(({ etapa, estado, monitoreada }, i) => (
-          <li key={etapa} className="flex items-center gap-2">
-            <span
-              aria-current={estado === "actual" ? "step" : undefined}
-              title={monitoreada ? undefined : "No monitoreada: las sondas WQS no miden dentro de su rango en esta etapa"}
-              className={`rounded-full border px-3 py-1 ${monitoreada ? "" : "border-dashed"} ${
-                estado === "actual"
-                  ? "border-blue-500 bg-blue-50 font-semibold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
-                  : estado === "hecha"
-                    ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300"
-                    : "border-slate-200 text-slate-500 dark:border-slate-700"}`}>
-              {estado === "hecha" && "✓ "}{ETAPA_LABEL[etapa] ?? etapa}
+    <section className="sc-card p-4">
+      <ol className="grid grid-cols-3 gap-x-1 gap-y-3 md:grid-cols-6">
+        {etapas.map(({ etapa, estado, monitoreada }) => (
+          <li key={etapa} aria-current={estado === "actual" ? "step" : undefined}
+            title={monitoreada ? undefined : "No monitoreada: las sondas WQS no miden dentro de su rango en esta etapa"}>
+            <span className={`mb-1.5 block truncate text-xs ${
+              estado === "actual" ? "font-semibold text-ink" : estado === "hecha" ? "text-ink-2" : "text-ink-3"}`}>
+              {ETAPA_LABEL[etapa] ?? etapa}
             </span>
-            {i < etapas.length - 1 && <span aria-hidden className="text-slate-300">›</span>}
+            <span className={`block h-1 ${monitoreada ? "" : "opacity-60"} ${
+              estado === "actual" ? "bg-accent" : estado === "hecha" ? "bg-brand" : "bg-line"}`} />
           </li>
         ))}
       </ol>
 
-      <div className="mt-3 flex flex-wrap gap-x-8 gap-y-1 text-sm">
+      <div className="mt-4 flex flex-wrap gap-x-10 gap-y-3">
         <Tiempo etiqueta={enCurso ? "Tiempo del ciclo" : "Duración del ciclo"} segundos={delCiclo} />
         {enCurso && (
           <>
@@ -66,11 +61,6 @@ export default function BarraEtapas({
           </>
         )}
       </div>
-      <p className="mt-1 text-xs text-slate-500">
-        Borde punteado: etapa no monitoreada (las sondas WQS no miden dentro de su rango, así
-        que no hay tendencia ni indicadores).
-        {enCurso && " Los tiempos por etapa y el restante vienen del estado de planta, no del ciclo."}
-      </p>
     </section>
   );
 }

@@ -12,7 +12,7 @@ import { EstadoVolumen, FilaUso, formatearLitros, formatearM3, formatearUso } fr
 // Las barras son HTML/CSS y no un gráfico de recharts: una etapa que aún no corrió
 // no tiene valor y recharts no dibuja ni su barra ni su etiqueta, y ahí tiene que
 // verse un "—".
-const ESTIMADO = "border border-dashed border-amber-600 text-amber-700 dark:border-amber-400 dark:text-amber-300";
+const ESTIMADO = "border border-dashed border-warn text-warn";
 
 function Fila({ f, maximo }: { f: FilaUso; maximo: number }) {
   const metodo = f.tipo === "quimico"
@@ -25,17 +25,17 @@ function Fila({ f, maximo }: { f: FilaUso; maximo: number }) {
         <span className="h-5">
           {f.litros !== null && (
             <span className={`block h-full rounded-r ${f.estimado
-              ? "border border-dashed border-amber-600 bg-amber-600/30"
-              : f.monitoreada ? "bg-blue-500" : "bg-amber-600"}`}
+              ? "border border-dashed border-warn bg-warn/10"
+              : f.monitoreada ? "bg-brand" : "bg-warn/10"}`}
               style={{ width: `${Math.max((f.litros / maximo) * 100, 0.5)}%` }} />
           )}
         </span>
-        <span className={`tabular-nums ${f.estimado && f.litros !== null ? `rounded px-1 ${ESTIMADO}` : ""}`}>
+        <span className={`font-mono tabular-nums ${f.estimado && f.litros !== null ? `rounded px-1 ${ESTIMADO}` : ""}`}>
           {f.estimado && f.litros !== null && <span title="valor estimado, no medido">≈ </span>}
           {f.litros === null && f.enCurso ? "en curso…" : formatearUso(f)}
         </span>
       </div>
-      <p className="text-right text-xs text-slate-500">
+      <p className="text-right text-xs text-ink-3">
         {metodo}
         {f.sanitizanteSinDato && " · sanitizante: sin dato"}
         {f.recirculadoL !== null && ` · recirculado ${formatearLitros(f.recirculadoL)} (no es consumo)`}
@@ -46,9 +46,9 @@ function Fila({ f, maximo }: { f: FilaUso; maximo: number }) {
 
 function Total({ titulo, valor, estimado = false }: { titulo: string; valor: string; estimado?: boolean }) {
   return (
-    <div className={`rounded-lg px-3 py-1.5 ${estimado ? ESTIMADO : "border border-slate-200 dark:border-slate-700"}`}>
-      <div className="text-xs text-slate-500">{titulo}</div>
-      <b className="text-base font-semibold tabular-nums">{estimado && valor !== "—" && "≈ "}{valor}</b>
+    <div className={`rounded-ctrl px-3 py-1.5 ${estimado ? ESTIMADO : "border border-line"}`}>
+      <div className="text-xs text-ink-3">{titulo}</div>
+      <b className="text-base font-semibold font-mono tabular-nums">{estimado && valor !== "—" && "≈ "}{valor}</b>
     </div>
   );
 }
@@ -58,21 +58,21 @@ export default function VolumenCirculado({ estado }: { estado: EstadoVolumen }) 
     ? Math.max(...estado.filas.map((f) => f.litros ?? 0), 1) : 1;
 
   return (
-    <section className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+    <section className="sc-card p-4">
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <h2 className="font-medium">Líquido usado</h2>
+        <h2 className="sc-eyebrow">Líquido usado</h2>
         {estado.tipo === "listo" && estado.simulado && (
-          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">Simulado</span>
+          <span className="rounded-ctrl bg-warn/10 px-2 py-0.5 text-[10px] font-semibold uppercase text-warn">Simulado</span>
         )}
       </div>
 
       {estado.tipo === "sin_caudal" && (
-        <p className="rounded-lg border border-dashed border-slate-300 p-3 text-sm text-slate-500 dark:border-slate-600">
+        <p className="rounded-ctrl border border-dashed border-line p-3 text-sm text-ink-3">
           Sin caudal: el equipo no informa caudal en este ciclo, así que no se puede calcular el líquido usado.
         </p>
       )}
       {estado.tipo === "acumulando" && (
-        <p className="text-sm text-slate-500">Acumulando volumen…</p>
+        <p className="text-sm text-ink-3">Acumulando volumen…</p>
       )}
 
       {estado.tipo === "listo" && (
@@ -88,7 +88,7 @@ export default function VolumenCirculado({ estado }: { estado: EstadoVolumen }) 
             {estado.filas.map((f) => <Fila key={f.etapa} f={f} maximo={maximo} />)}
           </ul>
 
-          <div className="mt-3 space-y-1 text-xs text-slate-500">
+          <div className="mt-3 space-y-1 text-xs text-ink-3">
             <p>
               Agua medida por caudal integrado; ~2 % bajo el valor real por los bordes de etapa.
               El total de cada tipo es la suma de sus filas.

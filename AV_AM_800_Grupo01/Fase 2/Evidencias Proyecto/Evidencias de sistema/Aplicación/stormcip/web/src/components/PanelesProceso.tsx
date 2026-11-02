@@ -5,9 +5,9 @@ import { ETIQUETA_ORIGEN, ETIQUETA_RETORNO, procesoDelCiclo } from "@/lib/etapas
 function Dato({ etiqueta, valor, unidad }: { etiqueta: string; valor: string; unidad?: string }) {
   return (
     <div className="flex items-baseline justify-between gap-2 text-sm">
-      <span className="text-slate-500">{etiqueta}</span>
-      <span className="font-medium tabular-nums">
-        {valor}{unidad && <span className="ml-1 text-xs font-normal text-slate-500">{unidad}</span>}
+      <span className="text-ink-3">{etiqueta}</span>
+      <span className="font-medium font-mono tabular-nums">
+        {valor}{unidad && <span className="ml-1 text-xs font-normal text-ink-3">{unidad}</span>}
       </span>
     </div>
   );
@@ -15,8 +15,8 @@ function Dato({ etiqueta, valor, unidad }: { etiqueta: string; valor: string; un
 
 function Panel({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-1.5 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
-      <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">{titulo}</h3>
+    <div className="space-y-1.5 rounded-ctrl border border-line p-3">
+      <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-3">{titulo}</h3>
       {children}
     </div>
   );
@@ -34,30 +34,30 @@ export default function PanelesProceso({
 
   const insignia = p
     ? (p.simulado
-        ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">Simulado</span>
-        : <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] uppercase text-slate-600 dark:bg-slate-800 dark:text-slate-400">{p.fuente}</span>)
+        ? <span className="rounded-ctrl bg-warn/10 px-2 py-0.5 text-[10px] font-semibold uppercase text-warn">Simulado</span>
+        : <span className="rounded-ctrl bg-raise px-2 py-0.5 text-[10px] uppercase text-ink-2">{p.fuente}</span>)
     : null;
 
   return (
-    <section className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+    <section className="sc-card p-4">
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <h2 className="font-medium">Estado de planta</h2>
+        <h2 className="sc-eyebrow">Estado de planta</h2>
         {insignia}
         {p && detenido && (
-          <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] text-red-800 dark:bg-red-950/40 dark:text-red-300">
+          <span className="rounded-ctrl bg-crit/10 px-2 py-0.5 text-[10px] text-crit">
             sin señal
           </span>
         )}
       </div>
 
       {cargando ? (
-        <p className="text-sm text-slate-500">Leyendo estado de planta…</p>
+        <p className="text-sm text-ink-3">Leyendo estado de planta…</p>
       ) : !p ? (
-        <p className="rounded-lg border border-dashed border-slate-300 p-3 text-sm text-slate-500 dark:border-slate-600">
+        <p className="rounded-ctrl border border-dashed border-line p-3 text-sm text-ink-3">
           Sin estado de planta para este ciclo. Lo escribe el PLC o, en la demo, el simulador.
         </p>
       ) : (
-        <div className={`grid gap-3 md:grid-cols-2 ${detenido ? "opacity-50" : ""}`}>
+        <div className={`grid gap-3 ${detenido ? "opacity-50" : ""}`}>
           <Panel titulo="Estanques">
             <Dato etiqueta="Soda" valor={`${formatear("nivel", p.estanques.soda.nivel)} %`}
               unidad={`${formatear("tempProceso", p.estanques.soda.temp)} °C`} />

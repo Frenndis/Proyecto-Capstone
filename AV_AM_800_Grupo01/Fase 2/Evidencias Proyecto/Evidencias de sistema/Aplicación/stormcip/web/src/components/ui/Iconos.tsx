@@ -62,3 +62,24 @@ export function IconoAjustes({ size = 16 }: P) {
     </svg>
   );
 }
+
+export function IconoCentral({ size = 16 }: P) {
+  return (
+    <svg {...base(size)}>
+      <rect x="3" y="3" width="7.5" height="7.5" rx="1" />
+      <rect x="13.5" y="3" width="7.5" height="7.5" rx="1" />
+      <rect x="3" y="13.5" width="7.5" height="7.5" rx="1" />
+      <rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1" />
+    </svg>
+  );
+}
+
+export function IconoPrediccion({ size = 16 }: P) {
+  return (
+    <svg {...base(size)}>
+      <path d="M3 3v18h18" />
+      <path d="M7 16l4-5 3 3 5-7" />
+      <path d="M19 7h-3M19 7v3" />
+    </svg>
+  );
+}

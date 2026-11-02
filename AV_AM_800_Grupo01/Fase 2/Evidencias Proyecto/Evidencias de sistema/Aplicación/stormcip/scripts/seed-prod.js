@@ -75,6 +75,21 @@ const db = admin.firestore();
     },
   });
 
+  // Línea y dispositivo de la demo: la simulación nunca se mezcla con cip-01
+  await db.doc("plantas/demo/lineas/cip-sim").set({
+    nombre: "CIP-SIM (demo)", anden: 0, estado: "activa", simulada: true, caudalNominalM3h: 18,
+  });
+  await db.doc("dispositivos/wqs-sim-01").set({
+    plantaId: "demo", lineaId: "cip-sim", tipo: "wqs-lb", activo: true,
+    devEui: "5349434950000001",
+    firmware: "1.2",
+    apiKeyHash: crypto.createHash("sha256").update(DEVICE_KEY).digest("hex"),
+    sondas: {
+      s1: { sondaId: "s1", modelo: "DR-PH01",   activa: true },
+      s2: { sondaId: "s2", modelo: "DR-ECK1.0", activa: true },
+    },
+  });
+
   // Umbrales de PROCESO, solo etapas de enjuague (alcance real del hardware).
   // 1500 µS/cm: bajo el tope de la DR-ECK1.0 y suponiendo que la app compensa la
   // temperatura (ver seed.js). Sin turbidez: el equipo no la mide.

@@ -1,18 +1,61 @@
 @import "tailwindcss";
-/* La paleta se define una sola vez en styles/tokens.css. */
+/* Variables que sigue usando /mockup. Las pantallas reales usan el tema de abajo. */
 @import "../styles/tokens.css";
 
-/* Expone los tokens a las utilidades de Tailwind (bg-background, etc.). */
-@theme inline {
-  --color-background: var(--bg-main);
-  --color-foreground: var(--text-main);
-  --color-accent: var(--accent);
-  --color-estimado: var(--estimado);
-  --color-alerta: var(--alerta);
+/* Sistema «Sala de Control» de Austral Storm Suite, Modo Storm: mismos valores de
+   src/index.css (.dark) de la suite. El color significa estado o interacción, nunca
+   decoración; la jerarquía la dan bordes de 1 px y fondos, no sombras ni gradientes. */
+@font-face { font-family: "Hanken Grotesk"; src: url("/fonts/hanken-grotesk-latin-wght-normal.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: "Hanken Grotesk"; src: url("/fonts/hanken-grotesk-latin-ext-wght-normal.woff2") format("woff2"); font-weight: 100 900; font-display: swap; unicode-range: U+0100-02BA, U+1E00-1E9F; }
+@font-face { font-family: "IBM Plex Mono"; src: url("/fonts/ibm-plex-mono-latin-400-normal.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "IBM Plex Mono"; src: url("/fonts/ibm-plex-mono-latin-500-normal.woff2") format("woff2"); font-weight: 500; font-display: swap; }
+@font-face { font-family: "IBM Plex Mono"; src: url("/fonts/ibm-plex-mono-latin-600-normal.woff2") format("woff2"); font-weight: 600; font-display: swap; }
+
+@theme {
+  --color-ink: #E8F0F8;
+  --color-ink-2: #B9CBDF;
+  --color-ink-3: #8CA1B8;
+  --color-paper: #0B1524;
+  --color-surface: #0E1B2E;
+  --color-raise: #12223A;
+  --color-sidebar: #091220;
+  --color-line: #1D3049;
+  --color-line-2: #2A415E;
+  --color-brand: #3E8FC7;
+  --color-brand-deep: #2F7AAF;
+  --color-accent: #2FB7E8;
+  --color-accent-ink: #7AD0F0;
+  --color-ok: #37C08B;
+  --color-warn: #D9A13B;
+  --color-crit: #E86A5E;
+  --radius-ctrl: 4px;
+  --radius-card: 6px;
+  --font-sans: "Hanken Grotesk", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", Consolas, monospace;
 }
 
-body {
-  background: var(--bg-main);
-  color: var(--text-main);
-  font-family: var(--font-sans);
+@layer base {
+  html { color-scheme: dark; }
+  body { background: var(--color-paper); color: var(--color-ink); font-family: var(--font-sans); font-size: 13.5px; line-height: 1.45; }
+  *, ::before, ::after { border-color: var(--color-line); }
+  :focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+  input, select, textarea { background: var(--color-paper); color: var(--color-ink); }
+  option { background: var(--color-surface); }
+  code { font-family: var(--font-mono); font-size: 0.92em; }
+}
+
+@layer components {
+  .sc-card { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius-card); }
+  .sc-eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-ink-3); }
+  .sc-kpi { font-family: var(--font-mono); font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.15; }
+  .sc-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 12px; border-radius: var(--radius-ctrl); font-size: 13px; font-weight: 600; background: var(--color-brand); color: #06121f; transition: background 140ms; cursor: pointer; }
+  .sc-btn:hover:not(:disabled) { background: var(--color-accent); }
+  .sc-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .sc-btn-ghost { background: transparent; color: var(--color-ink-2); border: 1px solid var(--color-line-2); }
+  .sc-btn-ghost:hover:not(:disabled) { background: var(--color-raise); }
+  .sc-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .sc-table th { position: sticky; top: 0; background: var(--color-surface); font-family: var(--font-mono); font-size: 10.5px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-ink-3); text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--color-line-2); white-space: nowrap; }
+  .sc-table td { padding: 8px 12px; border-bottom: 1px solid var(--color-line); white-space: nowrap; }
+  .sc-table tbody tr:last-child td { border-bottom: 0; }
+  .sc-table .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; }
 }

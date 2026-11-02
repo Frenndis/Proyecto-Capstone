@@ -148,7 +148,8 @@ async function crearCiclo(receta, plantaId, t0, escenario) {
     }
     tx.create(ref, {
       plantaId, lineaId: LINEA, camion: "SIM-DEMO",
-      programa: `Demo CIP ${modelo.duracionReceta(receta)} s (${escenario})`,
+      programa: `Demo CIP ${modelo.duracionReceta(receta)} s`,
+      receta: Object.fromEntries(receta.map((p) => [p.etapa, p.duracionS])),
       estado: "en_curso", etapaActual: receta[0].etapa,
       inicio: Timestamp.fromMillis(t0),
       consumos: { aguaTotal: 0, aguaRecuperada: 0, soda: 0, acido: 0 },

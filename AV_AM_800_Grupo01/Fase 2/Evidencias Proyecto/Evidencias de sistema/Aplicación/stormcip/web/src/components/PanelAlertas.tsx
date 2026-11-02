@@ -16,27 +16,26 @@ export default function PanelAlertas({ alertas }: { alertas: Alerta[] }) {
   });
 
   if (!alertas.length)
-    return <p className="text-sm text-slate-500">Sin alertas activas.</p>;
+    return <p className="text-sm text-ink-3">Sin alertas activas.</p>;
 
   return (
     <ul className="space-y-2">
       {alertas.map((a) => (
-        <li key={a.id} className="flex items-center justify-between gap-3 rounded-lg
-                                  border border-amber-300 bg-amber-50 p-3 text-sm
-                                  dark:bg-amber-950/30">
+        <li key={a.id} className="flex items-center justify-between gap-3 rounded-ctrl
+                                  border border-warn bg-warn/10 p-3 text-sm">
           <div>
-            <p className="font-medium">
+            <p className="sc-eyebrow">
               {META[a.variable]?.label ?? a.variable}:{" "}
               {formatear(a.variable, a.ultimoValor)} {META[a.variable]?.unidad}
               {/* v2: una alerta por condición, con cuántas veces se repitió */}
               {typeof a.conteo === "number" && a.conteo > 1 && (
-                <span className="ml-2 rounded-full bg-amber-200 px-2 py-0.5 text-[10px]
-                                 text-amber-900 dark:bg-amber-800 dark:text-amber-100">
+                <span className="ml-2 rounded-ctrl bg-warn/10 px-2 py-0.5 text-[10px]
+                                 text-warn">
                   ×{a.conteo}
                 </span>
               )}
             </p>
-            <p className="text-xs text-slate-600 dark:text-slate-400">
+            <p className="text-xs text-ink-2">
               {ETAPA_LABEL[a.etapa] ?? a.etapa} · límite {limiteAlerta(a)} ·
               {" desde "}
               {a.desde?.toDate ? a.desde.toDate().toLocaleTimeString("es-CL") : "—"}
@@ -45,8 +44,8 @@ export default function PanelAlertas({ alertas }: { alertas: Alerta[] }) {
           </div>
           {puedeReconocer && (
             <button onClick={() => reconocer(a.id)}
-              className="shrink-0 rounded-md bg-slate-900 px-3 py-1 text-xs text-white
-                         hover:bg-slate-700">
+              className="shrink-0 rounded-ctrl bg-brand px-3 py-1 text-xs text-[#06121f]
+                         hover:bg-brand-deep">
               Reconocer
             </button>
           )}

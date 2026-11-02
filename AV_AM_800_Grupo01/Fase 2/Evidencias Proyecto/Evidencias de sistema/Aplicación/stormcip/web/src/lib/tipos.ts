@@ -63,6 +63,7 @@ export type Ciclo = {
   // Por deviceId: cuándo se proyecta el agua limpia en el enjuague en curso (lo
   // escribe alCrearLectura; ver functions/src/proyeccionEnjuague.ts).
   proyeccionEnjuague?: Record<string, ProyeccionEnjuague>;
+  simulado?: boolean;
 };
 
 export type ProyeccionEnjuague = {

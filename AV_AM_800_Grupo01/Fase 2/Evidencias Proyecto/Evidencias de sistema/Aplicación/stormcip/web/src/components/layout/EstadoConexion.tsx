@@ -20,12 +20,12 @@ export default function EstadoConexion() {
     };
   }, []);
 
-  const clase = enLinea === null ? "" : enLinea ? " is-online" : " is-offline";
-  const texto = enLinea === null ? "Verificando…" : enLinea ? "Conectado" : "Sin conexión";
+  const texto = enLinea === null ? "Verificando…" : enLinea ? "En línea" : "Sin conexión";
+  const color = enLinea === null ? "text-ink-3" : enLinea ? "text-ok" : "text-crit";
 
   return (
-    <span className={`shell-conn${clase}`} role="status">
-      <span className="shell-dot" />
+    <span className={`inline-flex items-center gap-1.5 text-[12.5px] font-semibold ${color}`} role="status">
+      <i aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />
       {texto}
     </span>
   );

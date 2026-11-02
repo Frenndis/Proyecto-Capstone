@@ -31,28 +31,28 @@ export default function TarjetaSonda({
     : estado.tipo === "saturado" ? (calculado ? "cota inferior" : "saturado")
     : calculado ? "calculado" : null;
 
-  const unidad = <span className="ml-1 text-sm font-normal text-slate-500">{meta?.unidad}</span>;
+  const unidad = <span className="ml-1 text-sm font-normal text-ink-3">{meta?.unidad}</span>;
 
   return (
-    <div className={`rounded-xl border p-4 ${alerta
-      ? "border-red-400 bg-red-50 dark:bg-red-950/30"
-      : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"
+    <div className={`rounded-card border p-4 ${alerta
+      ? "border-crit bg-crit/10"
+      : "border-line bg-surface"
     } ${estado.tipo === "fuera_operacion" ? "opacity-60" : ""}`}>
       <div className="flex items-start justify-between gap-2">
-        <p className="text-xs uppercase tracking-wide text-slate-500">{meta?.label ?? variable}</p>
+        <p className="text-xs uppercase tracking-wide text-ink-3">{meta?.label ?? variable}</p>
         {insignia && (
-          <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px]
-                           text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+          <span className="shrink-0 rounded-ctrl bg-raise px-2 py-0.5 text-[10px]
+                           text-ink-2">
             {insignia}
           </span>
         )}
       </div>
 
       {estado.tipo === "sin_dato" ? (
-        <p className="mt-2 text-sm text-slate-500">Sin dato: {estado.motivo}</p>
+        <p className="mt-2 text-sm text-ink-3">Sin dato: {estado.motivo}</p>
       ) : (
         <>
-          <p className={`mt-1 text-2xl font-semibold tabular-nums ${alerta ? "text-red-600" : ""}`}>
+          <p className={`mt-1 sc-kpi font-mono tabular-nums ${alerta ? "text-crit" : ""}`}>
             {(estado.tipo === "saturado" || (estado.tipo === "sin_compensar" && estado.tope !== undefined)) && "≥ "}
             {formatear(variable,
               estado.tipo === "saturado" ? estado.tope
@@ -60,7 +60,7 @@ export default function TarjetaSonda({
               : estado.valor)}
             {unidad}
           </p>
-          <p className={`mt-1 text-xs ${alerta ? "text-red-600" : "text-slate-500"}`}>
+          <p className={`mt-1 text-xs ${alerta ? "text-crit" : "text-ink-3"}`}>
             {alerta ? "Fuera de rango"
               : estado.tipo === "fuera_operacion" ? "Fuera de operación: dato no confiable"
               : estado.tipo === "saturado" ? (calculado ? "Sonda saturada: valor real mayor o igual" : "Sonda saturada: valor real mayor")

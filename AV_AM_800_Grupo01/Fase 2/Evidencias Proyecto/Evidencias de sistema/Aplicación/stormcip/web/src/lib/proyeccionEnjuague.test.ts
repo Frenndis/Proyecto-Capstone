@@ -26,6 +26,11 @@ describe("avisoProyeccion", () => {
     expect(a?.detalle).toContain("caída exponencial");
   });
 
+  it("con plazo cero no muestra un «0 s» sin sentido", () => {
+    const a = avisoProyeccion(ciclo({ estado: "proyectando", restanteS: 0, restanteMinS: 0, restanteMaxS: 5 }), EQUIPO, true);
+    expect(a?.titulo).toBe("≈ A punto de llegar a agua limpia");
+  });
+
   it("cuando ya cumple, lo dice sin insinuar que la etapa se acorta sola", () => {
     const a = avisoProyeccion(ciclo({ estado: "limpio" }), EQUIPO, true);
     expect(a?.tono).toBe("listo");

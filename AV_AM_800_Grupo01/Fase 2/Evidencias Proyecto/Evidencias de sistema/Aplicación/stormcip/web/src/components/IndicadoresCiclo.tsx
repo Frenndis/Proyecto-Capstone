@@ -15,9 +15,9 @@ import {
 function Insignia({ confianza }: { confianza?: Confianza }) {
   const estimado = confianza === "estimado";
   return (
-    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] ${estimado
-      ? "bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200"
-      : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"}`}>
+    <span className={`shrink-0 rounded-ctrl px-2 py-0.5 text-[10px] ${estimado
+      ? "bg-warn/10 text-warn"
+      : "bg-raise text-ink-2"}`}>
       {estimado ? "estimado" : "medido"}
     </span>
   );
@@ -30,10 +30,10 @@ function Valor({
   clave: string; valor?: number; confianza?: Confianza; className?: string;
 }) {
   const estimado = confianza === "estimado";
-  if (typeof valor !== "number") return <span className="text-slate-400">—</span>;
+  if (typeof valor !== "number") return <span className="text-ink-3">—</span>;
   return (
-    <span className={`tabular-nums ${className} ${estimado
-      ? "text-amber-700 dark:text-amber-300" : ""}`}>
+    <span className={`font-mono tabular-nums ${className} ${estimado
+      ? "text-warn" : ""}`}>
       {estimado && <span title="valor estimado, no medido">≈ </span>}
       {formatear(clave, valor)}
     </span>
@@ -63,23 +63,23 @@ export default function IndicadoresCiclo({ ciclo }: { ciclo: Ciclo }) {
     : "Sin lecturas del enjuague final: no se puede evaluar.";
 
   return (
-    <section className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-      <h2 className="mb-3 font-medium">Indicadores del ciclo</h2>
+    <section className="sc-card p-4">
+      <h2 className="sc-eyebrow mb-3">Indicadores del ciclo</h2>
 
       {estado.tipo === "pendiente" ? (
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-ink-3">
           Se calculan al cerrar el ciclo, cuando ya existe la curva completa.
         </p>
       ) : estado.tipo === "sin_lecturas" ? (
-        <p className="rounded-lg border border-dashed border-slate-300 p-3 text-sm
-                      text-slate-500 dark:border-slate-600">
+        <p className="rounded-ctrl border border-dashed border-line p-3 text-sm
+                      text-ink-3">
           Ciclo sin lecturas en etapas monitoreadas. Solo se calculan sobre
           preenjuague, enjuague y enjuague final: en las etapas químicas las sondas
           trabajan fuera de su rango.
         </p>
       ) : estado.tipo === "sin_valores" ? (
-        <p className="rounded-lg border border-dashed border-slate-300 p-3 text-sm
-                      text-slate-500 dark:border-slate-600">
+        <p className="rounded-ctrl border border-dashed border-line p-3 text-sm
+                      text-ink-3">
           {estado.lecturas} lectura{estado.lecturas === 1 ? "" : "s"} en etapas
           monitoreadas, pero ninguna con conductividad válida: sin ella no se puede
           calcular ningún indicador.
@@ -90,28 +90,28 @@ export default function IndicadoresCiclo({ ciclo }: { ciclo: Ciclo }) {
             {claves.map((k) => {
               const estimado = confianza[k] === "estimado";
               return (
-                <div key={k} className={`rounded-xl border p-3 ${estimado
-                  ? "border-dashed border-amber-400 bg-amber-50 dark:bg-amber-950/20"
-                  : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"}`}>
+                <div key={k} className={`rounded-card border p-3 ${estimado
+                  ? "border-dashed border-warn bg-warn/10"
+                  : "border-line bg-surface"}`}>
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-xs uppercase tracking-wide text-slate-500">
+                    <p className="text-xs uppercase tracking-wide text-ink-3">
                       {META[k]?.label ?? k}
                     </p>
                     <Insignia confianza={confianza[k]} />
                   </div>
-                  <p className="mt-1 text-2xl font-semibold">
+                  <p className="mt-1 sc-kpi">
                     <Valor clave={k} valor={ciclo.indicadores?.[k]} confianza={confianza[k]} />
-                    <span className="ml-1 text-sm font-normal text-slate-500">
+                    <span className="ml-1 text-sm font-normal text-ink-3">
                       {META[k]?.unidad}
                     </span>
                   </p>
                   {/* El método va visible, no en un tooltip: "caudal nominal
                       supuesto" es justo lo que no debe quedar escondido. */}
                   {metodo[k] && (
-                    <p className="mt-2 text-[11px] leading-snug text-slate-500">{metodo[k]}</p>
+                    <p className="mt-2 text-[11px] leading-snug text-ink-3">{metodo[k]}</p>
                   )}
                   {k === "tiempoHastaLimpio" && typeof ciclo.indicadores?.[k] !== "number" && (
-                    <p className="mt-2 text-[11px] leading-snug text-amber-700 dark:text-amber-300">
+                    <p className="mt-2 text-[11px] leading-snug text-warn">
                       {sinLimpio}
                     </p>
                   )}
@@ -122,19 +122,19 @@ export default function IndicadoresCiclo({ ciclo }: { ciclo: Ciclo }) {
 
           {etapas.length > 0 && (
             <div className="mt-5">
-              <h3 className="mb-2 text-sm font-medium">Por etapa</h3>
+              <h3 className="sc-eyebrow mb-2">Por etapa</h3>
               {/* overflow-x: la tabla tiene 5 columnas y no cabe en un teléfono */}
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[32rem] text-sm">
                   <thead>
-                    <tr className="border-b border-slate-200 text-left dark:border-slate-700">
+                    <tr className="border-b border-line text-left">
                       <th className="py-2 pr-3 font-medium">Etapa</th>
                       {INDICADORES_CICLO.map((k) => (
                         <th key={k} className="py-2 pr-3 text-right font-medium">
-                          <span className="block text-xs uppercase tracking-wide text-slate-500">
+                          <span className="block text-xs uppercase tracking-wide text-ink-3">
                             {META[k]?.label ?? k}
                           </span>
-                          <span className="block text-[10px] font-normal text-slate-400">
+                          <span className="block text-[10px] font-normal text-ink-3">
                             {META[k]?.unidad || "—"}
                           </span>
                         </th>
@@ -143,8 +143,7 @@ export default function IndicadoresCiclo({ ciclo }: { ciclo: Ciclo }) {
                   </thead>
                   <tbody>
                     {etapas.map((e) => (
-                      <tr key={e} className="border-b border-slate-100 last:border-0
-                                             dark:border-slate-800">
+                      <tr key={e} className="border-b border-line last:border-0">
                         <td className="py-2 pr-3">{ETAPA_LABEL[e] ?? e}</td>
                         {INDICADORES_CICLO.map((k) => (
                           <td key={k} className="py-2 pr-3 text-right">
@@ -160,15 +159,13 @@ export default function IndicadoresCiclo({ ciclo }: { ciclo: Ciclo }) {
             </div>
           )}
 
-          <p className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-500
-                        dark:border-slate-800">
+          <p className="mt-4 border-t border-line pt-3 text-xs text-ink-3">
             Calculado sobre {estado.lecturas} lectura
             {estado.lecturas === 1 ? "" : "s"} en etapas monitoreadas
             {calculadosEn && ` · ${calculadosEn}`}.
             {/* La aclaración solo si hay algo estimado: si no, es ruido. */}
             {estado.claves.some((k) => confianza[k] === "estimado") && <>
-              {" "}Los valores marcados <b className="font-medium text-amber-700
-                dark:text-amber-300">estimado (≈)</b> usan supuestos de
+              {" "}Los valores marcados <b className="font-medium text-warn">estimado (≈)</b> usan supuestos de
               {" "}<code className="text-[11px]">configuracion/calculos</code>, no mediciones.
             </>}
           </p>

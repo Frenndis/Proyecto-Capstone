@@ -24,18 +24,18 @@ export default function GuardRol({
     if (!cargando && !user) router.replace("/login");
   }, [cargando, user, router]);
 
-  if (cargando || !user) return <p className="p-6 text-slate-500">Cargando…</p>;
+  if (cargando || !user) return <p className="p-6 text-ink-3">Cargando…</p>;
 
   if (!permitido) {
     return (
       <main className="flex min-h-screen items-center justify-center p-6">
-        <div className="w-full max-w-sm space-y-3 rounded-2xl border border-slate-200 p-6 dark:border-slate-700">
+        <div className="sc-card w-full max-w-sm space-y-3 p-6">
           <h1 className="text-lg font-semibold">Sin permisos</h1>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-ink-3">
             Tu cuenta ({user.email}) tiene rol <b>{rol ?? "sin rol"}</b> y esta página
             requiere: {roles.join(", ")}. Pide a un administrador que te asigne el rol.
           </p>
-          <button onClick={salir} className="rounded-lg border px-3 py-1 text-sm">Salir</button>
+          <button onClick={salir} className="sc-btn sc-btn-ghost">Salir</button>
         </div>
       </main>
     );
