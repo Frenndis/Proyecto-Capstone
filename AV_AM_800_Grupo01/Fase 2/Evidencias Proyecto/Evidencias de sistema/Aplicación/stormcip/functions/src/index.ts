@@ -13,3 +13,5 @@ export { onUserCreated, setUserRole } from "./auth";
 export { alCerrarCiclo, recalcularIndicadores } from "./ciclos";
 // Volumen circulado por etapa: integra el caudal de estadoProceso (ver volumenCirculado.ts).
 export { alCambiarEstadoProceso } from "./volumenCirculado";
+// Proyección del fin del enjuague: se recalcula con cada lectura (ver proyeccionEnjuague.ts).
+export { alCrearLectura } from "./proyeccionEnjuague";

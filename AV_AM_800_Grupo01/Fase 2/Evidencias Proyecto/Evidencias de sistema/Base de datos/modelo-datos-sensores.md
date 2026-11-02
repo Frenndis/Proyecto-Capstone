@@ -258,6 +258,17 @@ Se implementó la segunda alternativa propuesta: `ttnUplink` consulta `ciclos` p
 - Falta configurar el webhook real en la consola de TTN una vez se tenga la cuenta y el dispositivo físico.
 - Ver [sección 7](#7-limitaciones-y-trabajo-futuro) para las limitaciones del decoder propio (firmware ≥1.3.1, intervalo de envío, datalog, etc.).
 
+## 5b. Proyección del fin del enjuague
+
+`alCrearLectura` (`functions/src/proyeccionEnjuague.ts`) recalcula, con cada lectura de `enjuague` y `enjuague_final`, cuándo la conductividad llegará al criterio de agua limpia, y lo guarda en `ciclos/{id}.proyeccionEnjuague.{deviceId}`. Solo informa: no cambia el ciclo ni el PLC.
+
+- **Modelo:** `C(t) = Cagua + A·e^(−t/τ)`, ajustado sobre la cola de la curva, con intervalo aproximado al 95 %.
+- **Estados:** `datos_insuficientes`, `sin_criterio`, `no_converge`, `turbidez_pendiente`, `proyectando` y `limpio`.
+- **No informa un plazo** si la caída no es significativa, se estanca, no se ajusta al modelo (R² < 0,9) o el plazo supera 3 veces lo ya observado.
+- **Preenjuague excluido:** usa agua recuperada, que queda sobre la conductividad del agua de red que supone el modelo.
+
+**Límites:** los umbrales se calibraron con el modelo de simulación y hay que revisarlos con ciclos reales. `conductividadAguaRed` y `criterioLimpio` son supuestos, y la proyección hereda la posible doble compensación de temperatura (`PENDIENTES-DASHBOARD.md`, punto 1). Necesita al menos 5 lecturas de la caída: el envío por defecto del WQS-LB (cada 20 min) no alcanza. En la demo: `npm run sim:cip -- --uplink 3`.
+
 ## 6. Pendiente / siguientes pasos
 - Definir umbrales de proceso por etapa para las 4 variables nuevas (orp, oxigenoDisuelto, cloroResidual, cod) junto al cliente (Soprole/Austral Chemicals), igual que se hizo para temperatura/concentración/pH/turbidez.
 - Evaluar si el frontend necesita mostrar la unidad/rango de `CATALOGO_SONDAS` en el dashboard para dar contexto al operador.

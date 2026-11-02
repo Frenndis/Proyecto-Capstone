@@ -42,16 +42,16 @@ documento, cada ejecución contra producción requiere aprobación explícita.
 
 ## Nota: regiones de las funciones (no todas están en la misma)
 
-Seis funciones corren en `southamerica-west1` (Santiago): `ttnUplink`,
-`ingestLectura`, `setUserRole`, `alCerrarCiclo`, `recalcularIndicadores` y
-`alCambiarEstadoProceso` — las seis son Cloud Functions 2ª
+Siete funciones corren en `southamerica-west1` (Santiago): `ttnUplink`,
+`ingestLectura`, `setUserRole`, `alCerrarCiclo`, `recalcularIndicadores`,
+`alCambiarEstadoProceso` y `alCrearLectura` — las siete son Cloud Functions 2ª
 generación. `onUserCreated` corre en `southamerica-east1` (São Paulo): es
 la única de 1ª generación (usa el trigger `auth.user().onCreate`, que no
 existe en 2ª gen), y `southamerica-west1` no admite 1ª generación. Ver el
 comentario junto a `onUserCreated` en `functions/src/auth.ts`.
 
 ⚠️ **Una función mal configurada puede tumbar el deploy de otras, aunque no
-estén nombradas en el `--only`.** Las 7 funciones viven en un solo codebase
+estén nombradas en el `--only`.** Las 8 funciones viven en un solo codebase
 (`functions/src/index.ts`); Firebase CLI carga y evalúa ese archivo completo
 para descubrir todos los triggers **antes** de aplicar el filtro `--only`
 — es decir, `--only functions:ttnUplink,functions:ingestLectura` no evita
@@ -81,6 +81,7 @@ Compararlo contra lo que existe hoy en `functions/src/index.ts`:
 | `recalcularIndicadores` | v2 callable | `southamerica-west1` | Sí |
 | `onUserCreated` | v1 (auth trigger) | `southamerica-east1` | Sí |
 | `alCambiarEstadoProceso` | v2 Firestore (`estadoProceso/{lineaId}`) | `southamerica-west1` | Sí |
+| `alCrearLectura` | v2 Firestore (`ciclos/{cicloId}/lecturas/{lecturaId}`, al crear) | `southamerica-west1` | Sí |
 
 Si en el output de `functions:list` aparecen funciones de otros compañeros
 que no están en este listado (por ejemplo, algo de otra rama que ya se
@@ -129,7 +130,7 @@ paso se aprueba por separado y **no se cambia el orden**:
    valor va **entre comillas** (sin ellas la coma lo parte):
 
    ```
-   firebase deploy --project stormcip-972bd --only "functions:ttnUplink,functions:ingestLectura,functions:alCerrarCiclo,functions:recalcularIndicadores,functions:alCambiarEstadoProceso"
+   firebase deploy --project stormcip-972bd --only "functions:ttnUplink,functions:ingestLectura,functions:alCerrarCiclo,functions:recalcularIndicadores,functions:alCambiarEstadoProceso,functions:alCrearLectura"
    ```
 
    El `predeploy` compila `functions/` (`npm run build`). Las funciones nuevas
@@ -141,6 +142,11 @@ paso se aprueba por separado y **no se cambia el orden**:
    dashboard) y un marcador por evento en `ciclos/{id}/eventosVolumen/{eventId}`
    para no contar dos veces un evento duplicado. Esos marcadores vencen a los 30 días
    (campo `expiraEn`), pero solo se borran con la política TTL del paso siguiente.
+
+   `alCrearLectura` recalcula, con cada lectura de un enjuague, cuándo se llegaría al
+   criterio de agua limpia y lo escribe en `ciclos/{id}.proyeccionEnjuague` (lo que
+   muestra el aviso "Fin del enjuague" del dashboard). No requiere índices ni cambios
+   en las reglas. Lee hasta 60 lecturas por cada lectura nueva.
 
 3. **Política TTL de los marcadores de eventos** (una sola vez; puede hacerse antes
    o después de desplegar la función). Sin ella los documentos de `eventosVolumen`

@@ -197,6 +197,8 @@ export type Ciclo = {
   consumos?: Consumos;
   /** Litros circulados por etapa (integra el caudal de estadoProceso); lo escribe alCambiarEstadoProceso. */
   volumenCirculado?: VolumenCirculado;
+  /** Por deviceId: proyección del fin del enjuague en curso; la escribe alCrearLectura. */
+  proyeccionEnjuague?: Record<string, Record<string, unknown>>;
 };
 
 /**

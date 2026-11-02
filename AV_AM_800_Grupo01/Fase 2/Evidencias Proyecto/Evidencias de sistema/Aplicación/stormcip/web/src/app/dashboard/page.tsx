@@ -9,6 +9,8 @@ import {
 import { useEstadoProceso } from "@/hooks/useEstadoProceso";
 import { useHistorialPlanta } from "@/hooks/useHistorialPlanta";
 import { VARIABLES_DE_PLANTA } from "@/lib/historialPlanta";
+import ProyeccionEnjuague from "@/components/ProyeccionEnjuague";
+import { avisoProyeccion } from "@/lib/proyeccionEnjuague";
 import VolumenCirculado from "@/components/VolumenCirculado";
 import { estadoVolumen } from "@/lib/volumenCirculado";
 import { useAhora } from "@/hooks/useAhora";
@@ -182,6 +184,8 @@ function Dashboard() {
 
         <PanelesProceso cicloId={ciclo.id} proceso={proceso} cargando={cargandoProceso}
           detenido={detenido} />
+
+        <ProyeccionEnjuague aviso={avisoProyeccion(ciclo, deviceId, enVivo)} />
 
         <VolumenCirculado estado={volumen} />
 

@@ -60,6 +60,17 @@ export type Ciclo = {
   // estadoProceso; lo escribe alCambiarEstadoProceso). Una etapa que aún no tuvo
   // lecturas no tiene entrada. Es volumen circulado, no consumo.
   volumenCirculado?: { litros: Record<string, number>; huecos?: number; simulado?: boolean };
+  // Por deviceId: cuándo se proyecta el agua limpia en el enjuague en curso (lo
+  // escribe alCrearLectura; ver functions/src/proyeccionEnjuague.ts).
+  proyeccionEnjuague?: Record<string, ProyeccionEnjuague>;
+};
+
+export type ProyeccionEnjuague = {
+  etapa: string; muestras: number;
+  estado: "datos_insuficientes" | "sin_criterio" | "no_converge" | "turbidez_pendiente" | "limpio" | "proyectando";
+  // Solo con estado "proyectando"
+  restanteS?: number; restanteMinS?: number; restanteMaxS?: number;
+  metodo?: string;
 };
 
 // Estado de planta en vivo (estadoProceso/{lineaId}): lo que vendría del PLC.

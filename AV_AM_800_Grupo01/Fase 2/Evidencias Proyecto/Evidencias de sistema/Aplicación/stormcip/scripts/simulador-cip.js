@@ -36,6 +36,9 @@
 //                              coincidir con --linea)
 //   --tick <s>                 cada cuánto se escribe estadoProceso (2; mínimo 1,
 //                              por el límite de ~1 escritura/s por documento)
+//   --uplink <s>               cada cuánto llega una lectura (10; mínimo 1). La proyección del
+//                              enjuague necesita 5 lecturas de la caída: para verla en la
+//                              demo, 3 s (con 10 s el enjuague queda limpio antes)
 //   --esperar                  modo escucha, ver arriba
 //   --prod --project stormcip-972bd   producción: ambos flags explícitos,
 //                              credenciales de `gcloud auth application-default login`
@@ -45,7 +48,6 @@ const path = require("path");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
 const { resolverEntorno, inicializarAdmin } = require("./entorno");
 
-const UPLINK_CADA_S = 10;
 const UPLINK_DESFASE_S = 5;   // ver instantesUplink en modeloCip.ts
 const BATERIA_V = 3.6;
 // dev_eui de respaldo si el dispositivo no tiene devEui registrado (seed.js no
@@ -67,10 +69,12 @@ const DURACION = Number(arg("duracion", 300));
 const LINEA = arg("linea", ESPERAR ? "cip-sim" : "cip-01");
 const DISPOSITIVO = arg("dispositivo", ESPERAR ? "wqs-sim-01" : "wqs-lb-01");
 const TICK_S = Number(arg("tick", 2));
+const UPLINK_CADA_S = Number(arg("uplink", 10));
 
 if (ESPERAR && flag("escenario")) salir("--esperar recibe el escenario en cada orden del dashboard; no uses --escenario.");
 if (!["normal", "falla"].includes(ESCENARIO)) salir("--escenario debe ser normal o falla");
 if (!Number.isFinite(DURACION) || DURACION <= 0) salir("--duracion debe ser un número de segundos");
+if (!Number.isFinite(UPLINK_CADA_S) || UPLINK_CADA_S < 1) salir("--uplink debe ser de al menos 1 s");
 if (!Number.isFinite(TICK_S) || TICK_S < 1) {
   salir("--tick no puede ser menor a 1 s (límite de escrituras por documento de Firestore)");
 }
