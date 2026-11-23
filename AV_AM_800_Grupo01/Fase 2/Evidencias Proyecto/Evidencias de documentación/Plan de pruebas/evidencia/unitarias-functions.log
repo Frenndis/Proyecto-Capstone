@@ -1,0 +1,327 @@
+# npm test (functions) · 2026-11-23 14:11 · commit 44205a9
+The CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.
+
+ RUN  v2.1.9 C:/Users/fcarr/Dev/Personal/Proyecto-Capstone/AV_AM_800_Grupo01/Fase 2/Evidencias Proyecto/Evidencias de sistema/Aplicación/stormcip/functions
+
+ ✓ src/simulacion/relojCiclo.test.ts > planificarEspera > evento en el futuro: espera lo que falta, sin pausa
+ ✓ src/simulacion/relojCiclo.test.ts > planificarEspera > atraso dentro de la tolerancia (≤ 5 s): se ejecuta ya, sin pausar
+ ✓ src/simulacion/relojCiclo.test.ts > planificarEspera > atraso mayor a 5 s: pausa el ciclo por ese atraso
+ ✓ src/simulacion/relojCiclo.test.ts > planificarEspera > tras una pausa, los eventos siguientes conservan su cadencia (no hay ráfaga)
+ ✓ src/simulacion/relojCiclo.test.ts > planificarEspera > las pausas se acumulan
+ ✓ src/simulacion/relojCiclo.test.ts > tiempoModelo y momentoReal > descuenta la pausa: el progreso no salta al reanudar
+ ✓ src/simulacion/relojCiclo.test.ts > tiempoModelo y momentoReal > se acota al ciclo
+ ✓ src/simulacion/relojCiclo.test.ts > tiempoModelo y momentoReal > momentoReal desplaza los instantes del modelo por la pausa
+ ✓ src/simulacion/controlSimulacion.test.ts > decidir: órdenes válidas > iniciar con el simulador libre
+ ✓ src/simulacion/controlSimulacion.test.ts > decidir: órdenes válidas > detener con una simulación en marcha (no pide escenario)
+ ✓ src/simulacion/controlSimulacion.test.ts > decidir: rechazos > iniciar mientras ya hay una simulación (doble clic de otra sesión)
+ ✓ src/simulacion/controlSimulacion.test.ts > decidir: rechazos > detener sin simulación
+ ✓ src/simulacion/controlSimulacion.test.ts > decidir: rechazos > comando o escenario desconocidos
+ ✓ src/simulacion/controlSimulacion.test.ts > decidir: rechazos > sin solicitudId o con uno que no es texto
+ ✓ src/simulacion/controlSimulacion.test.ts > decidir: órdenes viejas y repetidas > una orden vencida no se ejecuta (quedó escrita con el simulador apagado)
+ ✓ src/simulacion/controlSimulacion.test.ts > decidir: órdenes viejas y repetidas > justo en el límite todavía vale
+ ✓ src/simulacion/controlSimulacion.test.ts > decidir: órdenes viejas y repetidas > la misma solicitudId no se procesa dos veces (snapshot repetido, reinicio del simulador)
+ ✓ src/simulacion/controlSimulacion.test.ts > decidir: órdenes viejas y repetidas > la ya procesada se ignora aunque esté vencida (no se vuelve a rechazar)
+ ✓ src/simulacion/controlSimulacion.test.ts > decidir: órdenes viejas y repetidas > sin orden: no hace nada
+ ✓ src/simulacion/controlSimulacion.test.ts > decidir: órdenes viejas y repetidas > hora aún sin confirmar (serverTimestamp pendiente): espera el siguiente snapshot
+ ✓ src/simulacion/controlSimulacion.test.ts > docEstado > libre
+ ✓ src/simulacion/controlSimulacion.test.ts > docEstado > ejecutando
+ ✓ src/wqsEncoder.test.ts > encodeWqsFPort2 — inverso de decodeWqs (FPort 2, formato B) > reproduce byte a byte el payload conocido del proyecto
+ ✓ src/wqsEncoder.test.ts > encodeWqsFPort2 — inverso de decodeWqs (FPort 2, formato B) > ida y vuelta con todas las sondas
+ ✓ src/wqsEncoder.test.ts > encodeWqsFPort2 — inverso de decodeWqs (FPort 2, formato B) > DS18B20 desconectado: null ida y vuelta (centinela 0x0CCC)
+ ✓ src/wqsEncoder.test.ts > encodeWqsFPort2 — inverso de decodeWqs (FPort 2, formato B) > temperaturas negativas usan complemento a dos
+ ✓ src/wqsEncoder.test.ts > encodeWqsFPort2 — inverso de decodeWqs (FPort 2, formato B) > cuantiza con la resolución del equipo
+ ✓ src/wqsEncoder.test.ts > encodeWqsFPort2 — inverso de decodeWqs (FPort 2, formato B) > conductividad de soda (~90 000 µS/cm) cabe en 16 bits gracias a la escala ×10
+ ✓ src/wqsEncoder.test.ts > encodeWqsFPort2 — inverso de decodeWqs (FPort 2, formato B) > ida y vuelta con DR-ECK1.0 y DR-PH01, sin turbidez ni DS18B20
+ ✓ src/wqsEncoder.test.ts > encodeWqsFPort2 — inverso de decodeWqs (FPort 2, formato B) > EC_K1 va sin divisor: 318 µS/cm se codifica 0x013E (bit 1 del flag)
+ ✓ src/wqsEncoder.test.ts > encodeWqsFPort2 — inverso de decodeWqs (FPort 2, formato B) > EC_K1 cuantiza a 1 µS/cm y admite hasta 65 535 (lo que reporta una sonda saturada)
+ ✓ src/wqsEncoder.test.ts > encodeWqsFPort2 — inverso de decodeWqs (FPort 2, formato B) > rechaza valores que no caben en 16 bits
+ ✓ src/wqsEncoder.test.ts > encodeWqsFPort2 — inverso de decodeWqs (FPort 2, formato B) > exige la temperatura de EC y pH (obligatoria en formato B)
+ ✓ src/mapeoWqs.test.ts > mapearAValores — DR-ECK1.0 (equipo comprado) > ecK1 → conductividad y ecK1Temp → tempEc
+ ✓ src/mapeoWqs.test.ts > mapearAValores — DR-ECK1.0 (equipo comprado) > ECK1 se toma sin divisor: 318 llega como 318
+ ✓ src/mapeoWqs.test.ts > mapearAValores — DR-ECK1.0 (equipo comprado) > con las dos conductividades en el payload usa la de la sonda declarada
+ ✓ src/mapeoWqs.test.ts > mapearAValores — DR-ECK1.0 (equipo comprado) > DR-ECK10.0 sigue funcionando para un equipo que la tenga
+ ✓ src/wqsDecoder.test.ts > FPort 5 — estado del dispositivo > decodifica el ejemplo oficial del manual
+ ✓ src/wqsDecoder.test.ts > FPort 5 — estado del dispositivo > decodifica un estado de firmware 1.2.0 en banda AU915, sub-banda 2
+ ✓ src/wqsDecoder.test.ts > FPort 5 — estado del dispositivo > decodifica firmware 1.3.3
+ ✓ src/wqsDecoder.test.ts > familiaFormatoFirmware — la regla con la que decodeWqs elige el formato de FPort 2 > A < 1.2, B de 1.2 a 1.3.0, C desde 1.3.1
+ ✓ src/wqsDecoder.test.ts > FPort 2 — formato antiguo (firmware < 1.2) > decodifica turbidez + ORP + pH sin temperaturas
+ ✓ src/wqsDecoder.test.ts > FPort 2 — formato antiguo (firmware < 1.2) > devuelve error si el largo no calza (2 bytes de más)
+ ✓ src/wqsDecoder.test.ts > FPort 2 — formato 1.2.x (con temperatura en EC_K10, EC_K1 y pH) > decodifica turbidez + ORP + pH con phTemp
+ ✓ src/wqsDecoder.test.ts > FPort 2 — formato 1.2.x (con temperatura en EC_K10, EC_K1 y pH) > regresión: pH + EC_K10 + turbidez no debe leer ECK10_temp como pH
+ ✓ src/wqsDecoder.test.ts > FPort 2 — formato 1.2.x (con temperatura en EC_K10, EC_K1 y pH) > oxígeno disuelto con temperatura (hipótesis con doTemp calza el largo)
+ ✓ src/wqsDecoder.test.ts > FPort 2 — formato 1.2.x (con temperatura en EC_K10, EC_K1 y pH) > oxígeno disuelto sin temperatura (hipótesis sin doTemp calza el largo)
+ ✓ src/wqsDecoder.test.ts > FPort 2 — formato 1.2.x (con temperatura en EC_K10, EC_K1 y pH) > ORP negativo
+ ✓ src/wqsDecoder.test.ts > FPort 2 — firmware >= 1.3.1 (flag de 2 bytes no documentado) > devuelve error para cualquier payload en firmware 1.3.3
+ ✓ src/wqsDecoder.test.ts > FPort 2 — firmware >= 1.3.1 (flag de 2 bytes no documentado) > devuelve error para firmware 1.3.1
+ ✓ src/wqsDecoder.test.ts > FPort 2 — firmware desconocido: inferir formato por largo (B primero, luego A) > infiere formato B cuando el largo solo calza con B
+ ✓ src/wqsDecoder.test.ts > FPort 2 — firmware desconocido: inferir formato por largo (B primero, luego A) > infiere formato A cuando el largo solo calza con A
+ ✓ src/wqsDecoder.test.ts > FPort 2 — firmware desconocido: inferir formato por largo (B primero, luego A) > devuelve error si el largo no calza ni con A ni con B
+ ✓ src/wqsDecoder.test.ts > FPort 3 — datalog (firmware < 1.3.3) > decodifica un registro con DO + EC_K1 + pH
+ ✓ src/wqsDecoder.test.ts > FPort 3 — datalog (firmware < 1.3.3) > ignora registros de 11 bytes en cero
+ ✓ src/wqsDecoder.test.ts > FPort 3 — datalog (firmware < 1.3.3) > devuelve error en firmware 1.3.3 (el datalog fue eliminado)
+ ✓ src/calculos.test.ts > derivarLectura — conductividad25C con sonda saturada o fuera de operación > valores medidos: EC25 medida
+ ✓ src/calculos.test.ts > derivarLectura — conductividad25C con sonda saturada o fuera de operación > conductividad saturada con temperatura válida: EC25 es cota inferior
+ ✓ src/calculos.test.ts > derivarLectura — conductividad25C con sonda saturada o fuera de operación > temperatura saturada: no se calcula EC25
+ ✓ src/calculos.test.ts > derivarLectura — conductividad25C con sonda saturada o fuera de operación > conductividad fuera de operación: no se calcula EC25
+ ✓ src/calculos.test.ts > derivarLectura — conductividad25C con sonda saturada o fuera de operación > sin confianza (ingest HTTP legado sin sondas) se comporta como antes
+ ✓ src/concentracion.test.ts > compensarA25 > a 25 °C no cambia la conductividad
+ ✓ src/concentracion.test.ts > compensarA25 > sobre 25 °C la baja y bajo 25 °C la sube
+ ✓ src/concentracion.test.ts > compensarA25 > con un factor no positivo devuelve la conductividad sin compensar
+ ✓ src/concentracion.test.ts > concentracionDesdeKappa > % = (κ25 − b) / m
+ ✓ src/concentracion.test.ts > calcularQuimica — cálculo > NaOH a 25 °C: 50 000 µS/cm → 1,0 %
+ ✓ src/concentracion.test.ts > calcularQuimica — cálculo > temperaturas distintas de 25 °C: la misma solución da la misma concentración
+ ✓ src/concentracion.test.ts > calcularQuimica — cálculo > ácido: fase 'acido' y su propio químico
+ ✓ src/concentracion.test.ts > calcularQuimica — cálculo > usa el α del químico, no un valor fijo
+ ✓ src/concentracion.test.ts > calcularQuimica — cálculo > prefiere la temperatura de la sonda EC sobre la de pH
+ ✓ src/concentracion.test.ts > calcularQuimica — cálculo > aplica la ordenada b de la curva
+ ✓ src/concentracion.test.ts > calcularQuimica — fase agua > κ25 bajo el umbral de agua: fase agua y concentración null, sin falta de confianza
+ ✓ src/concentracion.test.ts > calcularQuimica — fase agua > justo en el umbral ya cuenta como químico
+ ✓ src/concentracion.test.ts > calcularQuimica — fase agua > etapa sin químico (enjuague): fase agua aunque la EC sea alta por arrastre
+ ✓ src/concentracion.test.ts > calcularQuimica — lecturas no confiables: null, confianza baja y motivo > conductividad saturada
+ ✓ src/concentracion.test.ts > calcularQuimica — lecturas no confiables: null, confianza baja y motivo > conductividad fuera de operación
+ ✓ src/concentracion.test.ts > calcularQuimica — lecturas no confiables: null, confianza baja y motivo > temperatura saturada o fuera de operación
+ ✓ src/concentracion.test.ts > calcularQuimica — lecturas no confiables: null, confianza baja y motivo > falta la temperatura o la conductividad
+ ✓ src/concentracion.test.ts > calcularQuimica — sensorYaCompensa > false (por defecto): aplica la fórmula de compensación
+ ✓ src/concentracion.test.ts > calcularQuimica — sensorYaCompensa > true: κ25 = EC reportada, sin aplicar la fórmula
+ ✓ src/concentracion.test.ts > calcularQuimica — sensorYaCompensa > true: no necesita la temperatura
+ ✓ src/concentracion.test.ts > calcularQuimica — sensorYaCompensa > true: una EC saturada sigue sin calcularse
+ ✓ src/concentracion.test.ts > calcularQuimica — sensorYaCompensa > el flag es por sonda: otro modelo sin entrada se compensa
+ ✓ src/concentracion.test.ts > configConcentracion > sin nada guardado devuelve los valores por defecto
+ ✓ src/concentracion.test.ts > configConcentracion > mezcla por campo: lo editado cambia y el resto queda
+ ✓ src/concentracion.test.ts > configConcentracion > ignora valores inválidos en vez de romper la ingesta
+ ✓ src/concentracion.test.ts > fórmulas auxiliares > titulación: %NaOH = V·N·4 / V_muestra
+ ✓ src/concentracion.test.ts > fórmulas auxiliares > reposición: V_conc = V_estanque · (C_obj − C_act) / (C_conc − C_obj)
+ ✓ src/concentracion.test.ts > fórmulas auxiliares > reposición: sin solución si el concentrado no supera al objetivo
+ ✓ src/planta/planta.test.ts > motor > cada receta consume el agua de su ficha
+ ✓ src/planta/planta.test.ts > motor > es determinista: la misma semilla da la misma curva
+ ✓ src/planta/planta.test.ts > motor > un ciclo normal queda validado y la temperatura cumple el mínimo
+ ✓ src/planta/planta.test.ts > motor > un desvío extiende la soda 2 min y queda como corregido
+ ✓ src/planta/planta.test.ts > motor > si la soda nunca llega a su mínimo, el ciclo queda fuera de límite
+ ✓ src/planta/planta.test.ts > motor > los enjuagues caen bajo el criterio de agua limpia antes del fin de la fase
+ ✓ src/planta/planta.test.ts > motor > el ciclo cerrado lleva todo lo que necesitan las pantallas
+ ✓ src/planta/planta.test.ts > motor > todos los circuitos entregan un ciclo válido
+ ✓ src/planta/planta.test.ts > calcularDecisiones > con historia suficiente propone acortar y lo traduce en agua al mes
+ ✓ src/planta/planta.test.ts > calcularDecisiones > el tiempo sugerido cubre el 95 % de los ciclos
+ ✓ src/planta/planta.test.ts > calcularDecisiones > con pocos ciclos no propone acortar
+ ✓ src/planta/planta.test.ts > calcularDecisiones > con desvíos repetidos pide revisar y no sugiere acortar ese circuito
+ ✓ src/planta/planta.test.ts > calcularDecisiones > detecta concentración sobre la receta y estima el químico ahorrado
+ ✓ src/planta/planta.test.ts > calcularDecisiones > no inventa sobredosis en un circuito exacto
+ ✓ src/planta/planta.test.ts > calcularDecisiones > detecta el aumento de agua de un circuito con la misma duración
+ ✓ src/planta/planta.test.ts > calcularDecisiones > predice el consumo del próximo ciclo con rango y error
+ ✓ src/planta/planta.test.ts > calcularDecisiones > las alertas van antes que los ahorros
+ ✓ src/planta/planta.test.ts > percentil > usa el rango más cercano
+ ✓ src/planta/planes.test.ts > normalizarPlan > arma un plan nuevo con id derivado del nombre y valores por defecto
+ ✓ src/planta/planes.test.ts > normalizarPlan > el plan creado corre en el simulador y cierra un ciclo
+ ✓ src/planta/planes.test.ts > normalizarPlan > acepta números escritos con coma
+ ✓ src/planta/planes.test.ts > normalizarPlan > al modificar conserva el id y lo que el formulario no edita
+ ✓ src/planta/planes.test.ts > normalizarPlan > rechaza sin nombre
+ ✓ src/planta/planes.test.ts > normalizarPlan > rechaza sin fases
+ ✓ src/planta/planes.test.ts > normalizarPlan > rechaza fase repetida
+ ✓ src/planta/planes.test.ts > normalizarPlan > rechaza tipo desconocido
+ ✓ src/planta/planes.test.ts > normalizarPlan > rechaza química sin concentración
+ ✓ src/planta/planes.test.ts > normalizarPlan > rechaza mínimo sobre el objetivo
+ ✓ src/planta/planes.test.ts > normalizarPlan > rechaza duración fuera de rango
+ ✓ src/planta/planes.test.ts > normalizarPlan > rechaza todos los días libres
+ ✓ src/planta/planes.test.ts > apoyo > idDesdeNombre quita tildes y símbolos
+ ✓ src/planta/planes.test.ts > apoyo > planDesdeDoc descarta documentos incompletos
+ ✓ src/planta/planes.test.ts > apoyo > iCircuito: los de fábrica conservan su índice y los nuevos reciben uno estable
+ ✓ src/ciclos.test.ts > calcularIndicadoresCiclo > calcula tiempo hasta limpio por etapa desde la primera lectura de la etapa
+ ✓ src/ciclos.test.ts > calcularIndicadoresCiclo > global sin valor si el enjuague intermedio queda limpio pero el final no
+ ✓ src/ciclos.test.ts > calcularIndicadoresCiclo > global = tiempo hasta limpio del enjuague final, desde su primera lectura
+ ✓ src/ciclos.test.ts > calcularIndicadoresCiclo > global sin valor si no hay lecturas del enjuague final
+ ✓ src/ciclos.test.ts > calcularIndicadoresCiclo > entre 10 y 20 NTU el agua es aceptable pero no limpia, aunque la conductividad cumpla
+ ✓ src/ciclos.test.ts > calcularIndicadoresCiclo > entre 200 y 300 µS/cm el agua es aceptable pero no limpia
+ ✓ src/ciclos.test.ts > calcularIndicadoresCiclo > calcula el arrastre químico contra la conductividad del agua de red
+ ✓ src/ciclos.test.ts > calcularIndicadoresCiclo > marca el volumen como estimado, no como medido
+ ✓ src/ciclos.test.ts > calcularIndicadoresCiclo > ignora las etapas químicas: están fuera del alcance medible del WQS
+ ✓ src/ciclos.test.ts > calcularIndicadoresCiclo > devuelve global null si no hay ninguna lectura monitoreada
+ ✓ src/ciclos.test.ts > calcularIndicadoresCiclo > sin turbidez en las lecturas, el método de tiempo hasta limpio solo nombra la conductividad
+ ✓ src/ciclos.test.ts > calcularIndicadoresCiclo > arrastre con la primera lectura saturada: cota inferior marcada como saturado
+ ✓ src/ciclos.test.ts > calcularIndicadoresCiclo > una EC25 saturada nunca cuenta como limpia
+ ✓ src/ciclos.test.ts > calcularIndicadoresCiclo > lo fuera de operación no entra al cálculo (turbidez sobre 40 °C no aprueba la limpieza)
+ ✓ src/ciclos.test.ts > calcularIndicadoresCiclo > suma el volumen por etapa en vez de medir el lapso completo
+ ✓ src/ingestTx.test.ts > transaccionIngesta — la etapa sale del ciclo leído dentro de la transacción > si la etapa cambia antes de confirmar, la lectura y sus alertas usan la nueva
+ ✓ src/ingestTx.test.ts > transaccionIngesta — la etapa sale del ciclo leído dentro de la transacción > la ingesta no escribe etapaActual en el ciclo
+ ✓ src/ingestTx.test.ts > transaccionIngesta — la etapa sale del ciclo leído dentro de la transacción > una lectura atrasada se guarda pero no pisa ultimaLectura
+ ✓ src/ingestTx.test.ts > transaccionIngesta — la etapa sale del ciclo leído dentro de la transacción > ciclo con etapaActual inválida: no escribe nada
+ ✓ src/ingestTx.test.ts > transaccionIngesta — la etapa sale del ciclo leído dentro de la transacción > ciclo inexistente: 404 sin escrituras
+ ✓ src/ingestTx.test.ts > transaccionIngesta — la etapa sale del ciclo leído dentro de la transacción > lectura ya guardada (reintento): duplicado, sin escrituras
+ ✓ src/ingestTx.test.ts > transaccionIngesta — concentración química (quimica) > se calcula con la etapa del ciclo y se guarda en la lectura y en ultimaLectura
+ ✓ src/ingestTx.test.ts > transaccionIngesta — concentración química (quimica) > en una etapa sin químico queda la fase agua y concentración null
+ ✓ src/ingestTx.test.ts > transaccionIngesta — concentración química (quimica) > sin quimicaPara la lectura no lleva el campo (compatibilidad)
+ ✓ src/volumenCirculado.test.ts > litrosTrapecio > caudal constante: 18 m³/h = 5 L/s → 10 L en 2 s
+ ✓ src/volumenCirculado.test.ts > litrosTrapecio > rampa: promedia los dos extremos
+ ✓ src/volumenCirculado.test.ts > muestraDe > lee caudal, hora, etapa y ciclo
+ ✓ src/volumenCirculado.test.ts > muestraDe > acepta la hora como Timestamp con toDate
+ ✓ src/volumenCirculado.test.ts > muestraDe > sin caudal (equipo sin caudalímetro), sin hora o con caudal inválido: null
+ ✓ src/volumenCirculado.test.ts > intervaloVolumen > dos lecturas de la misma etapa: suma el trapecio
+ ✓ src/volumenCirculado.test.ts > intervaloVolumen > cambio de etapa (borde): no se cuenta
+ ✓ src/volumenCirculado.test.ts > intervaloVolumen > ciclos distintos: no se cuenta
+ ✓ src/volumenCirculado.test.ts > intervaloVolumen > ciclo que ya no estaba en curso: no se cuenta
+ ✓ src/volumenCirculado.test.ts > intervaloVolumen > la última lectura puede ser del cierre (bomba apagada): su rampa de bajada sí se cuenta
+ ✓ src/volumenCirculado.test.ts > intervaloVolumen > intervalo mayor al tope (PLC caído): hueco, sin sumar
+ ✓ src/volumenCirculado.test.ts > intervaloVolumen > intervalo no positivo o etapa inválida: se omite
+ ✓ src/volumenCirculado.test.ts > intervaloVolumen > falta una muestra: se omite
+ ✓ src/volumenCirculado.test.ts > acumular > suma por etapa sin modificar el original
+ ✓ src/volumenCirculado.test.ts > acumular > un hueco solo cuenta el hueco
+ ✓ src/volumenCirculado.test.ts > idMarcador > deja el ID del evento apto para una ruta de Firestore
+ ✓ src/volumenCirculado.test.ts > transaccionVolumen > suma el intervalo, deja un marcador y devuelve 'sumado'
+ ✓ src/volumenCirculado.test.ts > transaccionVolumen > el mismo evento entregado dos veces se cuenta una sola
+ ✓ src/volumenCirculado.test.ts > transaccionVolumen > un hueco suma el contador y no los litros
+ ✓ src/volumenCirculado.test.ts > transaccionVolumen > ciclo inexistente: no escribe nada
+ ✓ src/volumenCirculado.test.ts > transaccionVolumen > eventos DESORDENADOS dan el mismo total que en orden
+ ✓ src/volumenCirculado.test.ts > transaccionVolumen > un evento atrasado (de hora anterior a los ya contados) igual se cuenta
+ ✓ src/volumenCirculado.test.ts > transaccionVolumen > desordenados Y con duplicados: cada evento cuenta exactamente una vez
+ ✓ src/volumenCirculado.test.ts > ciclo completo del simulador > las etapas intermedias quedan 1,5–3,5 % bajo el valor exacto (pérdida en el borde)
+ ✓ src/volumenCirculado.test.ts > ciclo completo del simulador > la última etapa (desinfección) pierde casi nada, y se cuenta aunque no estaba en la lista original
+ ✓ src/volumenCirculado.test.ts > ciclo completo del simulador > el total del ciclo queda ~2 % bajo el exacto, incluida la desinfección
+ ✓ src/volumenCirculado.test.ts > ciclo completo del simulador > entregando los eventos desordenados y repetidos da el mismo resultado
+ ✓ src/ingest.test.ts > validarYLimpiarValores — tempExterna (DS18B20) > acepta tempExterna null (sensor no conectado) sin rechazar la lectura
+ ✓ src/ingest.test.ts > validarYLimpiarValores — tempExterna (DS18B20) > acepta tempExterna numérico dentro del rango del DS18B20
+ ✓ src/ingest.test.ts > validarYLimpiarValores — tempExterna (DS18B20) > descarta tempExterna sobre el máximo del DS18B20 (125 °C) y conserva el resto
+ ✓ src/ingest.test.ts > validarYLimpiarValores — tempExterna (DS18B20) > descarta tempExterna bajo el mínimo del DS18B20 (-55 °C) y conserva el resto
+ ✓ src/ingest.test.ts > validarYLimpiarValores — tempExterna (DS18B20) > descarta una variable sin sonda activa que la mida
+ ✓ src/ingest.test.ts > validarYLimpiarValores — tempExterna (DS18B20) > rechaza la lectura solo si no queda ninguna variable válida
+ ✓ src/ingest.test.ts > validarYLimpiarValores — temperaturas separadas por origen > acepta tempSonda y tempEc como variables distintas
+ ✓ src/ingest.test.ts > validarYLimpiarValores — saturación (DR-ECK1.0, 0–2000 µS/cm) > sobre el máximo guarda el tope con confianza saturado
+ ✓ src/ingest.test.ts > validarYLimpiarValores — saturación (DR-ECK1.0, 0–2000 µS/cm) > justo en el máximo también cuenta como saturado
+ ✓ src/ingest.test.ts > validarYLimpiarValores — saturación (DR-ECK1.0, 0–2000 µS/cm) > bajo el mínimo se descarta con el valor y el mínimo en el motivo
+ ✓ src/ingest.test.ts > validarYLimpiarValores — saturación (DR-ECK1.0, 0–2000 µS/cm) > el pH no satura: sobre 14 se descarta como falla de sensor; 14 justo es válido
+ ✓ src/ingest.test.ts > validarYLimpiarValores — saturación (DR-ECK1.0, 0–2000 µS/cm) > las temperaturas de sonda sí saturan (tempSonda y tempEc topan en 60 °C)
+ ✓ src/ingest.test.ts > validarYLimpiarValores — saturación (DR-ECK1.0, 0–2000 µS/cm) > una variable sin sonda en el equipo comprado (turbidez) se descarta
+ ✓ src/ingest.test.ts > validarYLimpiarValores — temperatura máxima de operación (60 °C) > con la temperatura de la propia sonda sobre 60 °C la variable queda fuera de operación
+ ✓ src/ingest.test.ts > validarYLimpiarValores — temperatura máxima de operación (60 °C) > temperatura saturada: fuera de operación aunque el valor guardado sea 60
+ ✓ src/ingest.test.ts > validarYLimpiarValores — temperatura máxima de operación (60 °C) > justo en 60 °C sigue en operación… salvo que sea el tope de la temperatura (saturada)
+ ✓ src/ingest.test.ts > validarYLimpiarValores — temperatura máxima de operación (60 °C) > turbidez (sin temperatura propia) usa la mayor temperatura del líquido
+ ✓ src/ingest.test.ts > validarYLimpiarValores — temperatura máxima de operación (60 °C) > sin temperatura medida no se puede evaluar: queda medido
+ ✓ src/ingest.test.ts > alertasDeLectura — umbral y saturación como alertas separadas > conductividad saturada en una etapa monitoreada: alerta de saturación y de umbral
+ ✓ src/ingest.test.ts > alertasDeLectura — umbral y saturación como alertas separadas > un derivado saturado bajo el máximo no dispara el umbral
+ ✓ src/ingest.test.ts > alertasDeLectura — umbral y saturación como alertas separadas > lo fuera de operación no dispara umbrales
+ ✓ src/ingest.test.ts > alertasDeLectura — umbral y saturación como alertas separadas > en etapas químicas no hay alerta de saturación
+ ✓ src/ingest.test.ts > alertasDeLectura — umbral y saturación como alertas separadas > umbral normal sobre un valor medido
+ ✓ src/ingest.test.ts > variablesVistasDe — tarjetas estables en el dashboard > incluye medidas, derivados y descartadas por valor inválido; no las null ni las sin sonda
+ ✓ src/ingest.test.ts > idAlerta — una alerta por ciclo+etapa+variable > genera el mismo ID mientras la condición persiste en la misma etapa
+ ✓ src/ingest.test.ts > idAlerta — una alerta por ciclo+etapa+variable > separa por variable y por etapa
+ ✓ src/ingest.test.ts > camposAlerta — fechas de la alerta con el reloj de la lectura > una alerta nueva parte con desde = hasta = ts de la lectura
+ ✓ src/ingest.test.ts > camposAlerta — fechas de la alerta con el reloj de la lectura > dos lecturas fuera de rango seguidas no cambian desde, pero sí actualizan hasta
+ ✓ src/ingest.test.ts > camposAlerta — fechas de la alerta con el reloj de la lectura > no escribe reconocida en una alerta activa (la deja como está)
+ ✓ src/ingest.test.ts > camposAlerta — fechas de la alerta con el reloj de la lectura > una lectura atrasada no retrocede hasta ni cambia ultimoValor, pero sí adelanta desde
+ ✓ src/ingest.test.ts > camposAlerta — fechas de la alerta con el reloj de la lectura > una lectura entre desde y hasta no mueve ninguno de los dos
+ ✓ src/ingest.test.ts > camposAlerta — fechas de la alerta con el reloj de la lectura > con ts igual a hasta sí actualiza ultimoValor
+ ✓ src/ingest.test.ts > camposAlerta — fechas de la alerta con el reloj de la lectura > una alerta reconocida que reaparece es un episodio nuevo
+ ✓ src/ingest.test.ts > planificarEscritura — reintentos con ID determinista > si la lectura ya existe es un duplicado y no planifica ninguna escritura
+ ✓ src/ingest.test.ts > planificarEscritura — reintentos con ID determinista > si la lectura es nueva planifica una escritura por alerta disparada
+ ✓ src/ingest.test.ts > planificarEscritura — ultimaLectura solo avanza > sin ultimaLectura guardada, la lectura pasa a ser la última
+ ✓ src/ingest.test.ts > planificarEscritura — ultimaLectura solo avanza > una lectura más nueva reemplaza la última
+ ✓ src/ingest.test.ts > planificarEscritura — ultimaLectura solo avanza > una lectura atrasada no reemplaza la última, aunque sí planifica sus alertas
+ ✓ src/ingest.test.ts > planificarEscritura — ultimaLectura solo avanza > con el mismo ts sí reemplaza (reenvío de la misma lectura)
+ ✓ src/estadoDispositivo.test.ts > planificarEstado — qué se guarda > con el ejemplo del manual guarda firmwareReportado, banda, subBanda, bateriaV y la hora
+ ✓ src/estadoDispositivo.test.ts > planificarEstado — qué se guarda > firmware 1.2.0 en AU915
+ ✓ src/estadoDispositivo.test.ts > planificarEstado — qué se guarda > nunca incluye el campo firmware del dispositivo
+ ✓ src/estadoDispositivo.test.ts > planificarEstado — modelo > modelo distinto de 0x3C: aviso y no se guarda nada
+ ✓ src/estadoDispositivo.test.ts > planificarEstado — modelo > 0x3C es el WQS-LB
+ ✓ src/estadoDispositivo.test.ts > planificarEstado — firmware registrado vs. reportado, por familia de formato > "1.2" registrado y el equipo reporta 1.2.0: misma versión, sin avisos
+ ✓ src/estadoDispositivo.test.ts > planificarEstado — firmware registrado vs. reportado, por familia de formato > "1.2" vs 1.3.3: familia distinta (C), aviso fuerte con la instrucción de instalar 1.2.x
+ ✓ src/estadoDispositivo.test.ts > planificarEstado — firmware registrado vs. reportado, por familia de formato > "1.2" vs 1.3.0: misma familia (B), sin aviso fuerte, solo informativo
+ ✓ src/estadoDispositivo.test.ts > planificarEstado — firmware registrado vs. reportado, por familia de formato > "1.2" vs 1.1.0: familia distinta (A), aviso fuerte
+ ✓ src/estadoDispositivo.test.ts > planificarEstado — firmware registrado vs. reportado, por familia de formato > registrado 1.2.0 y el equipo reporta 1.2.1: misma familia, informativo
+ ✓ src/estadoDispositivo.test.ts > planificarEstado — firmware registrado vs. reportado, por familia de formato > sin firmware registrado: pide registrarlo, con lo que reporta el equipo
+ ✓ src/estadoDispositivo.test.ts > planificarEstado — firmware registrado vs. reportado, por familia de formato > un firmware registrado que no es una versión (<COMPLETAR>) se trata como sin registro
+ ✓ src/simulacion/modeloCip.test.ts > receta > la receta por defecto dura 300 s y sigue el orden de ETAPAS
+ ✓ src/simulacion/modeloCip.test.ts > receta > escalarReceta mantiene proporciones y suma exacta
+ ✓ src/simulacion/modeloCip.test.ts > receta > escalarReceta rechaza duraciones que dejan etapas de menos de 6 s
+ ✓ src/simulacion/modeloCip.test.ts > receta > etapaEn ubica cada instante en su etapa
+ ✓ src/simulacion/modeloCip.test.ts > receta > los uplinks van cada 10 s, desfasados 5 s del inicio de cada etapa
+ ✓ src/simulacion/modeloCip.test.ts > estadoEn — determinismo > el mismo t da exactamente el mismo estado, en cualquier orden de llamada
+ ✓ src/simulacion/modeloCip.test.ts > estadoEn — determinismo > otra semilla cambia el ruido
+ ✓ src/simulacion/modeloCip.test.ts > estadoEn — física de planta > temperatura y concentración de ida en las etapas químicas
+ ✓ src/simulacion/modeloCip.test.ts > estadoEn — física de planta > la presión sube con el caudal (rampa de arranque vs régimen)
+ ✓ src/simulacion/modeloCip.test.ts > estadoEn — física de planta > el estanque de soda baja al enviar y no se recupera en los enjuagues
+ ✓ src/simulacion/modeloCip.test.ts > estadoEn — física de planta > el estanque de ácido baja durante la etapa ácida
+ ✓ src/simulacion/modeloCip.test.ts > estadoEn — física de planta > agua recuperada: baja en el preenjuague y el enjuague final la vuelve a llenar
+ ✓ src/simulacion/modeloCip.test.ts > estadoEn — física de planta > circuito por etapa: origen y destino del retorno
+ ✓ src/simulacion/modeloCip.test.ts > estadoEn — física de planta > al terminar el ciclo la bomba queda apagada
+ ✓ src/simulacion/modeloCip.test.ts > estadoEn — física de planta > los consumos crecen y quedan en unidades plausibles (m³ y litros)
+ ✓ src/simulacion/modeloCip.test.ts > estadoEn — sondas por el camino real del backend > escenario normal: ningún uplink de etapas monitoreadas cruza los umbrales del seed
+ ✓ src/simulacion/modeloCip.test.ts > estadoEn — sondas por el camino real del backend > escenario normal: el último uplink del enjuague final cumple criterioLimpio
+ ✓ src/simulacion/modeloCip.test.ts > estadoEn — sondas por el camino real del backend > en las etapas monitoreadas la conductividad cruda queda bajo el tope de la DR-ECK1.0
+ ✓ src/simulacion/modeloCip.test.ts > estadoEn — sondas por el camino real del backend > primer uplink del enjuague: ~1450 µS/cm crudo y ~1060 a 25 °C, bajo el umbral de 1500
+ ✓ src/simulacion/modeloCip.test.ts > estadoEn — sondas por el camino real del backend > escenario normal: el enjuague final empieza cerca de 280 µS/cm y cruza el criterio (200) a mitad de etapa
+ ✓ src/simulacion/modeloCip.test.ts > estadoEn — sondas por el camino real del backend > en los enjuagues la conductividad cae hacia el agua de red
+ ✓ src/simulacion/modeloCip.test.ts > estadoEn — sondas por el camino real del backend > escenario falla: la conductividad no baja y no se alcanza criterioLimpio
+ ✓ src/simulacion/modeloCip.test.ts > estadoEn — sondas por el camino real del backend > fallas aleatorias (escenario falla) > cada ciclo tiene 4 o 5 fallas distintas, deterministas por semilla
+ ✓ src/simulacion/modeloCip.test.ts > estadoEn — sondas por el camino real del backend > fallas aleatorias (escenario falla) > semillas distintas dan conjuntos de fallas distintos
+ ✓ src/simulacion/modeloCip.test.ts > estadoEn — sondas por el camino real del backend > fallas aleatorias (escenario falla) > cada falla programada la detecta el backend como alerta (varias por ciclo)
+ ✓ src/simulacion/modeloCip.test.ts > estadoEn — sondas por el camino real del backend > fallas aleatorias (escenario falla) > el catálogo cubre pH, conductividad y temperatura
+ ✓ src/simulacion/modeloCip.test.ts > estadoEn — sondas por el camino real del backend > fallas aleatorias (escenario falla) > la semilla no afecta al escenario normal (sigue sin alertas)
+ ✓ src/simulacion/modeloCip.test.ts > estadoEn — sondas por el camino real del backend > etapas químicas en régimen: todo se guarda, marcado saturado o fuera de operación
+ ✓ src/simulacion/modeloCip.test.ts > estadoEn — sondas por el camino real del backend > en las etapas monitoreadas no se descarta nada
+ ✓ src/simulacion/modeloCip.test.ts > estadoEn — sondas por el camino real del backend > todas las lecturas del ciclo se pueden codificar (caben en el payload)
+ ✓ src/proyeccionEnjuague.test.ts > proyectarEnjuague > con una curva exponencial ideal acierta el instante de limpieza
+ ✓ src/proyeccionEnjuague.test.ts > proyectarEnjuague > el orden de llegada de las lecturas no cambia el resultado
+ ✓ src/proyeccionEnjuague.test.ts > proyectarEnjuague > con ruido, el intervalo contiene el instante real y se informa más ancho
+ ✓ src/proyeccionEnjuague.test.ts > proyectarEnjuague > con menos de 5 lecturas no proyecta
+ ✓ src/proyeccionEnjuague.test.ts > proyectarEnjuague > todas en el mismo instante no permiten ajustar una recta
+ ✓ src/proyeccionEnjuague.test.ts > proyectarEnjuague > un salto de la señal no se confunde con una caída
+ ✓ src/proyeccionEnjuague.test.ts > proyectarEnjuague > las lecturas saturadas no entran al ajuste
+ ✓ src/proyeccionEnjuague.test.ts > proyectarEnjuague > ajusta desde el máximo: la subida inicial del químico no distorsiona la curva
+ ✓ src/proyeccionEnjuague.test.ts > proyectarEnjuague > una curva plana sobre el criterio no converge
+ ✓ src/proyeccionEnjuague.test.ts > proyectarEnjuague > una conductividad que sube no converge
+ ✓ src/proyeccionEnjuague.test.ts > proyectarEnjuague > una curva que cae y se estanca sobre el criterio no converge
+ ✓ src/proyeccionEnjuague.test.ts > proyectarEnjuague > una caída tan lenta que supera el horizonte no converge
+ ✓ src/proyeccionEnjuague.test.ts > proyectarEnjuague > no promete un plazo mucho más largo que lo ya observado
+ ✓ src/proyeccionEnjuague.test.ts > proyectarEnjuague > si el criterio no supera al agua de entrada, no hay proyección posible
+ ✓ src/proyeccionEnjuague.test.ts > proyectarEnjuague > si la última lectura cumple, informa limpio y desde cuándo
+ ✓ src/proyeccionEnjuague.test.ts > proyectarEnjuague > un rebote sobre el criterio deja de contar como limpio
+ ✓ src/proyeccionEnjuague.test.ts > proyectarEnjuague > limpio cuenta desde el último tramo continuo, no desde el primer cruce
+ ✓ src/proyeccionEnjuague.test.ts > proyectarEnjuague > con conductividad lista y turbidez alta, queda pendiente de la turbidez
+ ✓ src/proyeccionEnjuague.test.ts > proyectarEnjuague > con turbidez dentro del criterio, informa limpio
+ ✓ src/proyeccionEnjuague.test.ts > ETAPAS_PROYECCION > excluye el preenjuague (agua recuperada) y las etapas químicas
+ ✓ src/proyeccionEnjuague.test.ts > tStudent95 > baja al aumentar los grados de libertad
+ ✓ src/proyeccionEnjuague.test.ts > muestraDeLectura > toma EC25, saturación y turbidez de la lectura
+ ✓ src/proyeccionEnjuague.test.ts > muestraDeLectura > sin EC25 (sonda fuera de operación o equipo sin conductividad) no hay muestra
+ ✓ src/proyeccionEnjuague.test.ts > documentoProyeccion > nunca lleva undefined: Firestore lo rechazaría
+ ✓ src/proyeccionEnjuague.test.ts > documentoProyeccion > una proyección se declara estimada; una lectura que ya cumple, medida
+ ✓ src/proyeccionEnjuague.test.ts > con el modelo de simulación del ciclo > normal, semilla 1: desde 2/3 del tramo proyecta el cruce real con menos de 25 % de error
+ ✓ src/proyeccionEnjuague.test.ts > con el modelo de simulación del ciclo > normal, semilla 2: desde 2/3 del tramo proyecta el cruce real con menos de 25 % de error
+ ✓ src/proyeccionEnjuague.test.ts > con el modelo de simulación del ciclo > normal, semilla 3: desde 2/3 del tramo proyecta el cruce real con menos de 25 % de error
+ ✓ src/proyeccionEnjuague.test.ts > con el modelo de simulación del ciclo > normal, semilla 5: desde 2/3 del tramo proyecta el cruce real con menos de 25 % de error
+ ✓ src/proyeccionEnjuague.test.ts > con el modelo de simulación del ciclo > normal, semilla 7: desde 2/3 del tramo proyecta el cruce real con menos de 25 % de error
+ ✓ src/proyeccionEnjuague.test.ts > con el modelo de simulación del ciclo > normal, semilla 11: desde 2/3 del tramo proyecta el cruce real con menos de 25 % de error
+ ✓ src/proyeccionEnjuague.test.ts > con el modelo de simulación del ciclo > normal, semilla 13: desde 2/3 del tramo proyecta el cruce real con menos de 25 % de error
+ ✓ src/proyeccionEnjuague.test.ts > con el modelo de simulación del ciclo > normal, semilla 17: desde 2/3 del tramo proyecta el cruce real con menos de 25 % de error
+ ✓ src/proyeccionEnjuague.test.ts > con el modelo de simulación del ciclo > normal, semilla 19: desde 2/3 del tramo proyecta el cruce real con menos de 25 % de error
+ ✓ src/proyeccionEnjuague.test.ts > con el modelo de simulación del ciclo > normal, semilla 23: desde 2/3 del tramo proyecta el cruce real con menos de 25 % de error
+ ✓ src/proyeccionEnjuague.test.ts > con el modelo de simulación del ciclo > falla, semilla 1: en ningún momento promete una hora de limpieza
+ ✓ src/proyeccionEnjuague.test.ts > con el modelo de simulación del ciclo > falla, semilla 2: en ningún momento promete una hora de limpieza
+ ✓ src/proyeccionEnjuague.test.ts > con el modelo de simulación del ciclo > falla, semilla 3: en ningún momento promete una hora de limpieza
+ ✓ src/proyeccionEnjuague.test.ts > con el modelo de simulación del ciclo > falla, semilla 5: en ningún momento promete una hora de limpieza
+ ✓ src/proyeccionEnjuague.test.ts > con el modelo de simulación del ciclo > falla, semilla 7: en ningún momento promete una hora de limpieza
+ ✓ src/proyeccionEnjuague.test.ts > con el modelo de simulación del ciclo > falla, semilla 11: en ningún momento promete una hora de limpieza
+ ✓ src/proyeccionEnjuague.test.ts > con el modelo de simulación del ciclo > falla, semilla 13: en ningún momento promete una hora de limpieza
+ ✓ src/proyeccionEnjuague.test.ts > con el modelo de simulación del ciclo > falla, semilla 17: en ningún momento promete una hora de limpieza
+ ✓ src/proyeccionEnjuague.test.ts > con el modelo de simulación del ciclo > falla, semilla 19: en ningún momento promete una hora de limpieza
+ ✓ src/proyeccionEnjuague.test.ts > con el modelo de simulación del ciclo > falla, semilla 23: en ningún momento promete una hora de limpieza
+ ✓ src/planta/ml.test.ts > modelos entrenados > entrena los cinco modelos
+ ✓ src/planta/ml.test.ts > modelos entrenados > prueba solo con ciclos posteriores a los de entrenamiento
+ ✓ src/planta/ml.test.ts > modelos entrenados > limpio le gana al promedio en ciclos que no vio
+ ✓ src/planta/ml.test.ts > modelos entrenados > limpioVivo le gana al promedio en ciclos que no vio
+ ✓ src/planta/ml.test.ts > modelos entrenados > agua le gana al promedio en ciclos que no vio
+ ✓ src/planta/ml.test.ts > modelos entrenados > quimico le gana al promedio en ciclos que no vio
+ ✓ src/planta/ml.test.ts > modelos entrenados > predecir durante el enjuague es mejor que antes de empezar
+ ✓ src/planta/ml.test.ts > modelos entrenados > el riesgo de desvío reporta su medición, gane o no
+ ✓ src/planta/ml.test.ts > modelos entrenados > el margen cubre la mayoría de los ciclos que no vio
+ ✓ src/planta/ml.test.ts > modelos entrenados > nombra lo que más influye, y aprende la causa real
+ ✓ src/planta/ml.test.ts > modelos entrenados > más carga de producto predice más tiempo de enjuague
+ ✓ src/planta/ml.test.ts > modelos entrenados > la predicción en vivo usa la conductividad medida
+ ✓ src/planta/ml.test.ts > cuando no hay nada que aprender > con datos al azar no se declara útil
+ ✓ src/planta/ml.test.ts > cuando no hay nada que aprender > con pocos datos no entrena
+ ✓ src/planta/ml.test.ts > analizar > publica métricas y predicción por circuito
+ ✓ src/planta/ml.test.ts > analizar > el tiempo sugerido sigue cubriendo al menos el 95 % de los ciclos reales
+ ✓ src/planta/ml.test.ts > analizar > no deja valores que Firestore rechazaría
+
+ Test Files  17 passed (17)
+      Tests  316 passed (316)
+   Start at  14:11:42
+   Duration  40.83s (transform 3.00s, setup 0ms, collect 83.92s, tests 823ms, environment 3ms, prepare 14.31s)
+

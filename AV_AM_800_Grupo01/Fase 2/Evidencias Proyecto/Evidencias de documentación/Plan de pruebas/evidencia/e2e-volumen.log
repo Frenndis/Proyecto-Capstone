@@ -1,0 +1,47 @@
+# node e2e-volumen.js (scripts) · 2026-11-23 14:12 · commit 44205a9 · emuladores de Firebase (proyecto stormcip-dev)
+Entorno: emuladores · proyecto stormcip-dev · Firestore 127.0.0.1:8080
+
+==================== A. ciclo completo (receta de 300 s, tick de 2 s) ====================
+151 escrituras de estadoProceso → 145 intervalos esperados
+
+--- ciclos/CIP-VOL-A.volumenCirculado
+{
+  "litros": {
+    "preenjuague": 181.41666666666669,
+    "alcalino": 331.8277777777777,
+    "enjuague": 181.8,
+    "acido": 282.05833333333334,
+    "enjuague_final": 281.7611111111111,
+    "desinfeccion": 136.73888888888888
+  },
+  "huecos": 0,
+  "simulado": true
+}
+
+Contra el volumen exacto (18 m³/h = 5 L/s, rampas de 3 s y 2 s):
+  etapa            trigger (L)   exacto (L)   pérdida
+  preenjuague          181.4        187.5     3.24 %
+  alcalino             331.8        337.5     1.68 %
+  enjuague             181.8        187.5     3.04 %
+  acido                282.1        287.5     1.89 %
+  enjuague_final       281.8        287.5     2.00 %
+  desinfeccion         136.7        137.5     0.55 %
+  TOTAL               1395.6       1425.0     2.06 %
+✔ A: 145 eventos procesados una vez cada uno; el volumen por etapa coincide con la integración independiente
+
+==================== B. hueco de señal (60 s sin muestras) ====================
+{
+  "litros": {
+    "enjuague": 30
+  },
+  "huecos": 1,
+  "simulado": true
+}
+✔ B: el intervalo de 60 s no se sumó (se contó como hueco); los otros 3 intervalos suman 30 L
+
+==================== C. equipo sin caudal ====================
+✔ C: sin caudal no se escribe volumenCirculado ni marcadores (el dashboard muestra 'Sin caudal', no 0 L)
+
+Todo OK
+Datos de prueba borrados (CIP-VOL-A/B/C y sus líneas).
+codigo de salida: 0

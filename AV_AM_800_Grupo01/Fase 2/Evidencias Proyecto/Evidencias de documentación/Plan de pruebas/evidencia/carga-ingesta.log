@@ -1,0 +1,32 @@
+# node carga-ingesta.js (scripts) · 2026-11-23 14:13 · commit 44205a9 · emuladores de Firebase (proyecto stormcip-dev)
+Carga: 300 lecturas, 10 en paralelo → http://127.0.0.1:5001/stormcip-dev/southamerica-west1/ingestLectura
+Aceptadas (201): 174 de 300 · errores: {"500":126}
+Guardadas en Firestore: 174 de 300 · perdidas: 126
+Duración: 261.2 s · 1.1 lecturas/s
+Latencia por envío: p50 77 ms · p95 14085 ms · máx 21712 ms
+Informativo · tras reenviar una lectura ya enviada: 175 documentos (ingestLectura duplicó: limitación conocida, ver plan de pruebas)
+Lecturas de la prueba borradas (175).
+FALLA: se perdieron o rechazaron lecturas
+codigo de salida: 1
+
+Carga: 1000 lecturas, 25 en paralelo -> corrida detenida a mano: con 10 en paralelo ya fallaba (ver arriba).
+
+Carga: 150 lecturas, 1 en paralelo → http://127.0.0.1:5001/stormcip-dev/southamerica-west1/ingestLectura
+Aceptadas (201): 150 de 150 · errores: {}
+Guardadas en Firestore: 150 de 150 · perdidas: 0
+Duración: 24.9 s · 6.0 lecturas/s
+Latencia por envío: p50 77 ms · p95 79 ms · máx 14111 ms
+Informativo · tras reenviar una lectura ya enviada: 151 documentos (ingestLectura duplicó: limitación conocida, ver plan de pruebas)
+Lecturas de la prueba borradas (151).
+Todo OK
+codigo de salida: 0
+
+Carga: 150 lecturas, 3 en paralelo → http://127.0.0.1:5001/stormcip-dev/southamerica-west1/ingestLectura
+Aceptadas (201): 150 de 150 · errores: {}
+Guardadas en Firestore: 150 de 150 · perdidas: 0
+Duración: 26.6 s · 5.6 lecturas/s
+Latencia por envío: p50 77 ms · p95 2932 ms · máx 10214 ms
+Informativo · tras reenviar una lectura ya enviada: 151 documentos (ingestLectura duplicó: limitación conocida, ver plan de pruebas)
+Lecturas de la prueba borradas (151).
+Todo OK
+codigo de salida: 0

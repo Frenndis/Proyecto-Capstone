@@ -1,0 +1,42 @@
+# Recorrido UAT · 23-11-2026, 2:34:34 p. m. · http://localhost:3000 (emuladores de Firebase) · msedge.exe
+PASA  UAT-01 · HU-08 · sin sesión, /dashboard lleva al inicio de sesión
+PASA  UAT-02 · HU-08 · contraseña incorrecta muestra un error y no entra · mensaje: «No se pudo iniciar sesión. Revisa tu conexión e intenta de nuevo.»
+PASA  UAT-03 · HU-08 · el administrador inicia sesión y llega a Central CIP
+PASA  UAT-04 · Central CIP muestra los ciclos de hoy y el plano de circuitos
+PASA  UAT-05 · HU-04 · el gráfico ofrece elegir variables (6) y periodo (5)
+PASA  UAT-06 · HU-04 · al agregar Conductividad aparece su carril en el gráfico · 4 carriles
+PASA  UAT-07 · HU-04 · con «Últimos 7 días» se dibujan las lecturas de todos los ciclos del periodo · 7 ciclos · 637 lecturas
+PASA  UAT-08 · HU-04 · al pasar el cursor se ve ciclo, fase y valor de cada variable
+PASA  UAT-09 · HU-04 · «Últimos 30 días» con todos los circuitos carga más de 100 ciclos · 216 ciclos · 19.656 lecturas
+PASA  UAT-10 · HU-11 · un operador o admin inicia un ciclo de demostración desde el dashboard
+PASA  UAT-11 · HU-07 · el dashboard muestra una proyección en minutos con su nivel de confianza · ≈ 24 min · confianza 98 % · alta
+PASA  UAT-12 · HU-02 · la barra de fases marca la fase en curso y el reloj avanza
+PASA  UAT-13 · HU-07 · se avisa cuando una variable tiende a salir de su rango, con su confianza · 07:15 Temperatura tiende a bajar del mínimo (65,0 °C) en menos de 1 min · confianza 83 %
+PASA  UAT-14 · HU-03 · al salir del rango queda el aviso «fuera de rango» con valor y límite
+PASA  UAT-15 · HU-07 · en el enjuague final se proyecta en minutos cuándo llega a agua limpia · Agua limpia · enjuague final ≈ 1,0 min confianza 87 % · alta Quedarían 00:59 de fase con el agua ya limpia. El
+PASA  UAT-16 · HU-06 · al cerrar, el ciclo queda «Con desvío» y emite su registro
+PASA  UAT-17 · HU-06 · el registro del ciclo muestra cumplimiento por fase, agua limpia y consumos
+PASA  UAT-18 · HU-05 · Consumos muestra agua y químico de los últimos 30 días y por circuito
+PASA  UAT-19 · HU-07 · Predicción lista decisiones con ahorro y el desempeño de los modelos
+PASA  UAT-20 · Reportes entrega el resumen para gerencia de los últimos 30 días
+PASA  UAT-21 · HU-01/HU-10 · Sensores WQS-LB abre la vista de la línea piloto
+PASA  UAT-22 · Planes · se listan los 8 planes de fábrica y los límites de validación
+PASA  UAT-23 · Planes · el servidor rechaza un plan inválido (mínimo sobre el objetivo) y explica por qué
+PASA  UAT-24 · Planes · el administrador crea un plan nuevo y aparece en la lista
+PASA  UAT-25 · Planes · el administrador modifica un plan y el cambio queda guardado (25 → 28 min)
+PASA  UAT-26 · Límites · no se acepta un criterio de agua limpia menor que el agua de red
+PASA  UAT-27 · HU-09 · el administrador crea cuentas con su rol (operador y visor) · 3 cuentas
+PASA  UAT-28 · HU-09 · el administrador cambia el rol de un usuario
+PASA  UAT-29 · HU-09 · no se puede dejar la planta sin administrador (único admin)
+PASA  UAT-30 · Usuarios · el administrador desactiva y reactiva una cuenta
+PASA  UAT-31 · HU-08 · el visor inicia sesión
+PASA  UAT-32 · HU-08 · el visor no ve el menú Usuarios
+PASA  UAT-33 · HU-08 · el visor ve el ciclo pero no puede iniciar uno
+PASA  UAT-34 · HU-08 · el visor no entra a Usuarios: ve «Sin permisos»
+PASA  UAT-35 · HU-08 · el visor ve los planes pero sin botones para crear ni modificar
+PASA  UAT-36 · HU-08 · el operador inicia sesión
+PASA  UAT-37 · HU-08 · el operador puede iniciar un ciclo, y no ve Usuarios
+PASA  UAT-38 · HU-08 · el operador no puede crear ni modificar planes
+
+Resultado: 38 de 38 casos pasan.
+codigo de salida: 0

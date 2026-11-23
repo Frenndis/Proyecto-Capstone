@@ -1,0 +1,23 @@
+# npm run seed + npm run sim:ttn (scripts) · 2026-11-23 14:12 · commit 44205a9 · emuladores de Firebase (proyecto stormcip-dev)
+Seed OK -> admin@stormcip.dev / admin123 | esp32-01/dev-key-123 | wqs-lb-01/dev-key-wqs-456
+== 1) Uplink valido (pH, EC_K1, firmware 1.2) ==
+201 {"ok":true,"lecturaId":"0011223344556677_1795453963","alertas":0,"descartadas":{}}
+== 2) Uplink con pH sobre la escala (>14): se descarta solo el pH ==
+201 {"ok":true,"lecturaId":"0011223344556677_1795453966","alertas":0,"descartadas":{"ph":"sobre el máximo de escala (15.5 > 14 pH): falla de sensor"}}
+== 3) Uplink de dispositivo desconocido ==
+200 {"ok":true,"ignorado":true,"motivo":"dispositivo desconocido"}
+== 4) FPort=5 con un payload de lectura (no mide 7 bytes): se ignora ==
+200 {"ok":true,"ignorado":true,"motivo":"formato no soportado: FPort 5 esperaba 7 bytes, recibió 13"}
+== 5) Idempotencia: mismo payload + mismo received_at, dos veces ==
+(si el ciclo activo tiene alertas configuradas para la etapa actual,
+ revisar en la Emulator UI que 'lecturas' y 'alertas' no queden duplicadas)
+-- primer envio --
+201 {"ok":true,"lecturaId":"0011223344556677_1790424000","alertas":0,"descartadas":{}}
+-- reenvio (mismo body): deberia pisar la misma lectura/alertas, no duplicar --
+200 {"ok":true,"duplicado":true,"lecturaId":"0011223344556677_1790424000"}
+== 6) Estado (FPort=5), firmware 1.2.0 AU915: se guarda sin avisos ==
+200 {"ok":true,"estado":true,"firmwareReportado":"1.2.0","avisos":[]}
+== 7) Estado (FPort=5), firmware 1.3.3: se guarda y el log avisa FIRMWARE INCOMPATIBLE ==
+200 {"ok":true,"estado":true,"firmwareReportado":"1.3.3","avisos":["familia_distinta"]}
+== 8) Estado (FPort=5) de dispositivo desconocido: 200 ignorado ==
+200 {"ok":true,"ignorado":true,"motivo":"dispositivo desconocido"}

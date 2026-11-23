@@ -20,7 +20,7 @@ emulador junto con los flags de producción.
 |---|---|
 | `cerrar-ciclo.js`, `recalcular.js`, `rotar-key.js`, `simulador-prod.js`, `simulador-cip.js` | `--prod --project stormcip-austral` (guardarraíles compartidos en `scripts/entorno.js`; además se niegan si encuentran `PROJECT_ID=stormcip-austral` sin `--prod`) |
 | `seed-prod.js`, `produccion-plantilla.js` | `--project stormcip-austral --confirmar` (solo producción; 5 s para cancelar) |
-| `seed.js`, `simulador.js`, `simulador-ttn.js`, `e2e-quimica.js`, `e2e-volumen.js` | Nunca: solo emuladores |
+| `seed.js`, `simulador.js`, `simulador-ttn.js`, `e2e-quimica.js`, `e2e-volumen.js`, `carga-ingesta.js`, `uat-recorrido.js` | Nunca: solo emuladores |
 
 Las credenciales de los scripts con Admin SDK son las de
 `gcloud auth application-default login`. Igual que los comandos de este
@@ -42,16 +42,16 @@ documento, cada ejecución contra producción requiere aprobación explícita.
 
 ## Nota: regiones de las funciones (no todas están en la misma)
 
-Ocho funciones corren en `southamerica-west1` (Santiago): `ttnUplink`,
-`ingestLectura`, `setUserRole`, `alCerrarCiclo`, `recalcularIndicadores`,
-`alCambiarEstadoProceso`, `alCrearLectura` y `alCalcularIndicadores` — las ocho son Cloud Functions 2ª
-generación. `onUserCreated` corre en `southamerica-east1` (São Paulo): es
-la única de 1ª generación (usa el trigger `auth.user().onCreate`, que no
-existe en 2ª gen), y `southamerica-west1` no admite 1ª generación. Ver el
-comentario junto a `onUserCreated` en `functions/src/auth.ts`.
+El código exporta 17 funciones (`functions/src/index.ts`). Quince corren en
+`southamerica-west1` (Santiago), todas de 2ª generación. Dos corren en
+`southamerica-east1` (São Paulo): `onUserCreated`, la única de 1ª generación (usa
+el trigger `auth.user().onCreate`, que no existe en 2ª gen, y `southamerica-west1`
+no admite 1ª generación), y `planificarCiclos`, la función programada. Ver el
+comentario junto a `onUserCreated` en `functions/src/auth.ts`. La lista completa
+está en la tabla del paso 1.
 
 ⚠️ **Una función mal configurada puede tumbar el deploy de otras, aunque no
-estén nombradas en el `--only`.** Las 9 funciones viven en un solo codebase
+estén nombradas en el `--only`.** Las 17 funciones viven en un solo codebase
 (`functions/src/index.ts`); Firebase CLI carga y evalúa ese archivo completo
 para descubrir todos los triggers **antes** de aplicar el filtro `--only`
 — es decir, `--only functions:ttnUplink,functions:ingestLectura` no evita
@@ -86,13 +86,27 @@ Compararlo contra lo que existe hoy en `functions/src/index.ts`:
 |---|---|---|---|
 | `ttnUplink` | v2 HTTP | `southamerica-west1` | Sí |
 | `ingestLectura` | v2 HTTP | `southamerica-west1` | Sí |
-| `setUserRole` | v2 callable | `southamerica-west1` | Sí |
 | `alCerrarCiclo` | v2 Firestore (`ciclos/{cicloId}`, al actualizar) | `southamerica-west1` | Sí |
 | `recalcularIndicadores` | v2 callable | `southamerica-west1` | Sí |
-| `onUserCreated` | v1 (auth trigger) | `southamerica-east1` | Sí |
 | `alCambiarEstadoProceso` | v2 Firestore (`estadoProceso/{lineaId}`) | `southamerica-west1` | Sí |
 | `alCrearLectura` | v2 Firestore (`ciclos/{cicloId}/lecturas/{lecturaId}`, al crear) | `southamerica-west1` | Sí |
-| `alCalcularIndicadores` | v2 Firestore (`ciclos/{cicloId}`, al actualizar) | `southamerica-west1` | Sí |
+| `iniciarCicloDemo` | v2 callable | `southamerica-west1` | Sí |
+| `recalcularDecisiones` | v2 Firestore (`ciclos/{cicloId}`, al actualizar) | `southamerica-west1` | Sí |
+| `planificarCiclos` | v2 programada (cada 60 min) | `southamerica-east1` | Sí |
+| `asegurarPlanes` | v2 callable | `southamerica-west1` | Sí |
+| `guardarPlan` | v2 callable | `southamerica-west1` | Sí |
+| `eliminarPlan` | v2 callable | `southamerica-west1` | Sí |
+| `onUserCreated` | v1 (auth trigger) | `southamerica-east1` | Sí |
+| `setUserRole` | v2 callable | `southamerica-west1` | Sí |
+| `listarUsuarios` | v2 callable | `southamerica-west1` | Sí |
+| `crearUsuario` | v2 callable | `southamerica-west1` | Sí |
+| `setUserActivo` | v2 callable | `southamerica-west1` | Sí |
+
+Estado al 23-11-2026: las 17 están desplegadas en `stormcip-austral`. Las seis últimas
+del bloque de planes y usuarios (`asegurarPlanes`, `guardarPlan`, `eliminarPlan`,
+`listarUsuarios`, `crearUsuario`, `setUserActivo`) se publicaron ese día, junto con
+Hosting. `alCalcularIndicadores`, que figuraba en versiones anteriores de esta tabla,
+no existe en el código ni en el proyecto.
 
 Si en el output de `functions:list` aparecen funciones de otros compañeros
 que no están en este listado (por ejemplo, algo de otra rama que ya se

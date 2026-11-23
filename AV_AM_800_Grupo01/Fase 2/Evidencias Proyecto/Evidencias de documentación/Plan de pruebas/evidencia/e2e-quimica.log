@@ -1,0 +1,527 @@
+# node e2e-quimica.js (scripts) · 2026-11-23 14:13 · commit 44205a9 · emuladores de Firebase (proyecto stormcip-dev)
+Entorno: emuladores · proyecto stormcip-dev · Firestore 127.0.0.1:8080 · uplinks a http://127.0.0.1:5001/stormcip-dev/southamerica-west1/ttnUplink
+configuracion/calculos antes de la prueba: {"factorCompensacionEC":0.02,"conductividadAguaRed":150,"caudalNominalM3h":18,"criterioLimpio":{"conductividad25C":200,"turbidez":10}}
+
+==================== 1. ALCALINA válida (EC 14 000 µS/cm, 45 °C) ====================
+POST ttnUplink → HTTP 201 {"ok":true,"lecturaId":"5349434950000099_1795453999","alertas":0,"descartadas":{}}
+
+--- lecturas/5349434950000099_1795453999  (resumen)
+{
+  "etapa": "alcalino",
+  "valores": {
+    "ph": 13.2,
+    "conductividad": 14000,
+    "tempSonda": 45,
+    "tempEc": 45,
+    "tempExterna": null
+  },
+  "derivados": {
+    "conductividad25C": 10000
+  },
+  "confianza": {
+    "ph": "medido",
+    "conductividad": "medido",
+    "tempSonda": "medido",
+    "tempEc": "medido",
+    "conductividad25C": "medido"
+  },
+  "quimica": {
+    "fase": "soda",
+    "quimico": "NaOH",
+    "kappa25": 10144.9,
+    "concentracionQuimica": 0.203,
+    "confianza": "estimado",
+    "motivo": null,
+    "metodo": "κ25 = EC / (1 + 0.019·(T−25)), T=45 °C (tempEc); % = (κ25[mS/cm] − 0) / 50 (curva de ejemplo, sin calibrar)"
+  }
+}
+
+--- ciclos/CIP-QUIM-TEST.ultimaLectura.wqs-quimica-01  (resumen)
+{
+  "ts": "2026-11-23T17:13:19.000Z",
+  "valores": {
+    "ph": 13.2,
+    "conductividad": 14000,
+    "tempSonda": 45,
+    "tempEc": 45,
+    "tempExterna": null
+  },
+  "confianza": {
+    "ph": "medido",
+    "conductividad": "medido",
+    "tempSonda": "medido",
+    "tempEc": "medido",
+    "conductividad25C": "medido"
+  },
+  "descartadas": {},
+  "quimica": {
+    "fase": "soda",
+    "quimico": "NaOH",
+    "kappa25": 10144.9,
+    "concentracionQuimica": 0.203,
+    "confianza": "estimado",
+    "motivo": null,
+    "metodo": "κ25 = EC / (1 + 0.019·(T−25)), T=45 °C (tempEc); % = (κ25[mS/cm] − 0) / 50 (curva de ejemplo, sin calibrar)"
+  }
+}
+✔ quimica de la lectura y de ultimaLectura coinciden con calcularQuimica y con el cálculo manual
+
+==================== 2. ALCALINA saturada (EC 20 000 µS/cm = tope de la sonda) ====================
+POST ttnUplink → HTTP 201 {"ok":true,"lecturaId":"5349434950000099_1795454009","alertas":0,"descartadas":{}}
+
+--- lecturas/5349434950000099_1795454009  (resumen)
+{
+  "etapa": "alcalino",
+  "valores": {
+    "ph": 13.2,
+    "conductividad": 20000,
+    "tempSonda": 45,
+    "tempEc": 45,
+    "tempExterna": null
+  },
+  "derivados": {
+    "conductividad25C": 14285.7
+  },
+  "confianza": {
+    "ph": "medido",
+    "conductividad": "saturado",
+    "tempSonda": "medido",
+    "tempEc": "medido",
+    "conductividad25C": "saturado"
+  },
+  "quimica": {
+    "fase": "soda",
+    "quimico": "NaOH",
+    "kappa25": null,
+    "concentracionQuimica": null,
+    "confianza": "baja",
+    "motivo": "conductividad saturada (20000 µS/cm): el valor real es mayor",
+    "metodo": null
+  }
+}
+
+--- ciclos/CIP-QUIM-TEST.ultimaLectura.wqs-quimica-01  (resumen)
+{
+  "ts": "2026-11-23T17:13:29.000Z",
+  "valores": {
+    "ph": 13.2,
+    "conductividad": 20000,
+    "tempSonda": 45,
+    "tempEc": 45,
+    "tempExterna": null
+  },
+  "confianza": {
+    "ph": "medido",
+    "conductividad": "saturado",
+    "tempSonda": "medido",
+    "tempEc": "medido",
+    "conductividad25C": "saturado"
+  },
+  "descartadas": {},
+  "quimica": {
+    "fase": "soda",
+    "quimico": "NaOH",
+    "kappa25": null,
+    "concentracionQuimica": null,
+    "confianza": "baja",
+    "motivo": "conductividad saturada (20000 µS/cm): el valor real es mayor",
+    "metodo": null
+  }
+}
+✔ quimica de la lectura y de ultimaLectura coinciden con calcularQuimica y con el cálculo manual
+
+==================== 3. ÁCIDA (EC 9 000 µS/cm, 30 °C) ====================
+POST ttnUplink → HTTP 201 {"ok":true,"lecturaId":"5349434950000099_1795454019","alertas":0,"descartadas":{}}
+
+--- lecturas/5349434950000099_1795454019  (resumen)
+{
+  "etapa": "acido",
+  "valores": {
+    "ph": 2.1,
+    "conductividad": 9000,
+    "tempSonda": 30,
+    "tempEc": 30,
+    "tempExterna": null
+  },
+  "derivados": {
+    "conductividad25C": 8181.8
+  },
+  "confianza": {
+    "ph": "medido",
+    "conductividad": "medido",
+    "tempSonda": "medido",
+    "tempEc": "medido",
+    "conductividad25C": "medido"
+  },
+  "quimica": {
+    "fase": "acido",
+    "quimico": "acido",
+    "kappa25": 8219.2,
+    "concentracionQuimica": 0.164,
+    "confianza": "estimado",
+    "motivo": null,
+    "metodo": "κ25 = EC / (1 + 0.019·(T−25)), T=30 °C (tempEc); % = (κ25[mS/cm] − 0) / 50 (curva de ejemplo, sin calibrar)"
+  }
+}
+
+--- ciclos/CIP-QUIM-TEST.ultimaLectura.wqs-quimica-01  (resumen)
+{
+  "ts": "2026-11-23T17:13:39.000Z",
+  "valores": {
+    "ph": 2.1,
+    "conductividad": 9000,
+    "tempSonda": 30,
+    "tempEc": 30,
+    "tempExterna": null
+  },
+  "confianza": {
+    "ph": "medido",
+    "conductividad": "medido",
+    "tempSonda": "medido",
+    "tempEc": "medido",
+    "conductividad25C": "medido"
+  },
+  "descartadas": {},
+  "quimica": {
+    "fase": "acido",
+    "quimico": "acido",
+    "kappa25": 8219.2,
+    "concentracionQuimica": 0.164,
+    "confianza": "estimado",
+    "motivo": null,
+    "metodo": "κ25 = EC / (1 + 0.019·(T−25)), T=30 °C (tempEc); % = (κ25[mS/cm] − 0) / 50 (curva de ejemplo, sin calibrar)"
+  }
+}
+✔ quimica de la lectura y de ultimaLectura coinciden con calcularQuimica y con el cálculo manual
+
+==================== 4. ENJUAGUE FINAL (EC 300 µS/cm, 25 °C) ====================
+POST ttnUplink → HTTP 201 {"ok":true,"lecturaId":"5349434950000099_1795454029","alertas":0,"descartadas":{}}
+
+--- lecturas/5349434950000099_1795454029  (resumen)
+{
+  "etapa": "enjuague_final",
+  "valores": {
+    "ph": 7.2,
+    "conductividad": 300,
+    "tempSonda": 25,
+    "tempEc": 25,
+    "tempExterna": null
+  },
+  "derivados": {
+    "conductividad25C": 300
+  },
+  "confianza": {
+    "ph": "medido",
+    "conductividad": "medido",
+    "tempSonda": "medido",
+    "tempEc": "medido",
+    "conductividad25C": "medido"
+  },
+  "quimica": {
+    "fase": "agua",
+    "quimico": null,
+    "kappa25": null,
+    "concentracionQuimica": null,
+    "confianza": null,
+    "motivo": "etapa sin químico (enjuague_final)",
+    "metodo": null
+  }
+}
+
+--- ciclos/CIP-QUIM-TEST.ultimaLectura.wqs-quimica-01  (resumen)
+{
+  "ts": "2026-11-23T17:13:49.000Z",
+  "valores": {
+    "ph": 7.2,
+    "conductividad": 300,
+    "tempSonda": 25,
+    "tempEc": 25,
+    "tempExterna": null
+  },
+  "confianza": {
+    "ph": "medido",
+    "conductividad": "medido",
+    "tempSonda": "medido",
+    "tempEc": "medido",
+    "conductividad25C": "medido"
+  },
+  "descartadas": {},
+  "quimica": {
+    "fase": "agua",
+    "quimico": null,
+    "kappa25": null,
+    "concentracionQuimica": null,
+    "confianza": null,
+    "motivo": "etapa sin químico (enjuague_final)",
+    "metodo": null
+  }
+}
+✔ quimica de la lectura y de ultimaLectura coinciden con calcularQuimica y con el cálculo manual
+
+==================== 5. ALCALINA bajo el umbral de agua (EC 3 000 µS/cm, 25 °C) ====================
+POST ttnUplink → HTTP 201 {"ok":true,"lecturaId":"5349434950000099_1795454039","alertas":0,"descartadas":{}}
+
+--- lecturas/5349434950000099_1795454039  (resumen)
+{
+  "etapa": "alcalino",
+  "valores": {
+    "ph": 13.2,
+    "conductividad": 3000,
+    "tempSonda": 25,
+    "tempEc": 25,
+    "tempExterna": null
+  },
+  "derivados": {
+    "conductividad25C": 3000
+  },
+  "confianza": {
+    "ph": "medido",
+    "conductividad": "medido",
+    "tempSonda": "medido",
+    "tempEc": "medido",
+    "conductividad25C": "medido"
+  },
+  "quimica": {
+    "fase": "agua",
+    "quimico": "NaOH",
+    "kappa25": 3000,
+    "concentracionQuimica": null,
+    "confianza": null,
+    "motivo": "κ25 3 mS/cm bajo el umbral de agua (5 mS/cm)",
+    "metodo": "κ25 = EC / (1 + 0.019·(T−25)), T=25 °C (tempEc)"
+  }
+}
+
+--- ciclos/CIP-QUIM-TEST.ultimaLectura.wqs-quimica-01  (resumen)
+{
+  "ts": "2026-11-23T17:13:59.000Z",
+  "valores": {
+    "ph": 13.2,
+    "conductividad": 3000,
+    "tempSonda": 25,
+    "tempEc": 25,
+    "tempExterna": null
+  },
+  "confianza": {
+    "ph": "medido",
+    "conductividad": "medido",
+    "tempSonda": "medido",
+    "tempEc": "medido",
+    "conductividad25C": "medido"
+  },
+  "descartadas": {},
+  "quimica": {
+    "fase": "agua",
+    "quimico": "NaOH",
+    "kappa25": 3000,
+    "concentracionQuimica": null,
+    "confianza": null,
+    "motivo": "κ25 3 mS/cm bajo el umbral de agua (5 mS/cm)",
+    "metodo": "κ25 = EC / (1 + 0.019·(T−25)), T=25 °C (tempEc)"
+  }
+}
+✔ quimica de la lectura y de ultimaLectura coinciden con calcularQuimica y con el cálculo manual
+
+>>> configuracion/calculos.concentracion = {"quimicos":{"NaOH":{"m":25}},"sensorYaCompensa":{"DR-ECK10.0":true}}   [válido: m=25 y sensorYaCompensa DR-ECK10.0=true]
+
+==================== 6. ALCALINA con override VÁLIDO (misma lectura que el caso 1) ====================
+POST ttnUplink → HTTP 201 {"ok":true,"lecturaId":"5349434950000099_1795454049","alertas":0,"descartadas":{}}
+
+--- lecturas/5349434950000099_1795454049  (resumen)
+{
+  "etapa": "alcalino",
+  "valores": {
+    "ph": 13.2,
+    "conductividad": 14000,
+    "tempSonda": 45,
+    "tempEc": 45,
+    "tempExterna": null
+  },
+  "derivados": {
+    "conductividad25C": 10000
+  },
+  "confianza": {
+    "ph": "medido",
+    "conductividad": "medido",
+    "tempSonda": "medido",
+    "tempEc": "medido",
+    "conductividad25C": "medido"
+  },
+  "quimica": {
+    "fase": "soda",
+    "quimico": "NaOH",
+    "kappa25": 14000,
+    "concentracionQuimica": 0.56,
+    "confianza": "estimado",
+    "motivo": null,
+    "metodo": "κ25 = EC (la sonda DR-ECK10.0 ya compensa la temperatura); % = (κ25[mS/cm] − 0) / 25 (curva de ejemplo, sin calibrar)"
+  }
+}
+
+--- ciclos/CIP-QUIM-TEST.ultimaLectura.wqs-quimica-01  (resumen)
+{
+  "ts": "2026-11-23T17:14:09.000Z",
+  "valores": {
+    "ph": 13.2,
+    "conductividad": 14000,
+    "tempSonda": 45,
+    "tempEc": 45,
+    "tempExterna": null
+  },
+  "confianza": {
+    "ph": "medido",
+    "conductividad": "medido",
+    "tempSonda": "medido",
+    "tempEc": "medido",
+    "conductividad25C": "medido"
+  },
+  "descartadas": {},
+  "quimica": {
+    "fase": "soda",
+    "quimico": "NaOH",
+    "kappa25": 14000,
+    "concentracionQuimica": 0.56,
+    "confianza": "estimado",
+    "motivo": null,
+    "metodo": "κ25 = EC (la sonda DR-ECK10.0 ya compensa la temperatura); % = (κ25[mS/cm] − 0) / 25 (curva de ejemplo, sin calibrar)"
+  }
+}
+✔ quimica de la lectura y de ultimaLectura coinciden con calcularQuimica y con el cálculo manual
+
+>>> configuracion/calculos.concentracion = {"quimicos":{"NaOH":{"m":"abc","alpha":null}},"sensorYaCompensa":{"DR-ECK10.0":"si"}}   [inválido: m='abc', alpha=null, sensorYaCompensa='si']
+
+==================== 7. ALCALINA con override INVÁLIDO (se ignora → igual que el caso 1) ====================
+POST ttnUplink → HTTP 201 {"ok":true,"lecturaId":"5349434950000099_1795454059","alertas":0,"descartadas":{}}
+
+--- lecturas/5349434950000099_1795454059  (resumen)
+{
+  "etapa": "alcalino",
+  "valores": {
+    "ph": 13.2,
+    "conductividad": 14000,
+    "tempSonda": 45,
+    "tempEc": 45,
+    "tempExterna": null
+  },
+  "derivados": {
+    "conductividad25C": 10000
+  },
+  "confianza": {
+    "ph": "medido",
+    "conductividad": "medido",
+    "tempSonda": "medido",
+    "tempEc": "medido",
+    "conductividad25C": "medido"
+  },
+  "quimica": {
+    "fase": "soda",
+    "quimico": "NaOH",
+    "kappa25": 10144.9,
+    "concentracionQuimica": 0.203,
+    "confianza": "estimado",
+    "motivo": null,
+    "metodo": "κ25 = EC / (1 + 0.019·(T−25)), T=45 °C (tempEc); % = (κ25[mS/cm] − 0) / 50 (curva de ejemplo, sin calibrar)"
+  }
+}
+
+--- ciclos/CIP-QUIM-TEST.ultimaLectura.wqs-quimica-01  (resumen)
+{
+  "ts": "2026-11-23T17:14:19.000Z",
+  "valores": {
+    "ph": 13.2,
+    "conductividad": 14000,
+    "tempSonda": 45,
+    "tempEc": 45,
+    "tempExterna": null
+  },
+  "confianza": {
+    "ph": "medido",
+    "conductividad": "medido",
+    "tempSonda": "medido",
+    "tempEc": "medido",
+    "conductividad25C": "medido"
+  },
+  "descartadas": {},
+  "quimica": {
+    "fase": "soda",
+    "quimico": "NaOH",
+    "kappa25": 10144.9,
+    "concentracionQuimica": 0.203,
+    "confianza": "estimado",
+    "motivo": null,
+    "metodo": "κ25 = EC / (1 + 0.019·(T−25)), T=45 °C (tempEc); % = (κ25[mS/cm] − 0) / 50 (curva de ejemplo, sin calibrar)"
+  }
+}
+✔ quimica de la lectura y de ultimaLectura coinciden con calcularQuimica y con el cálculo manual
+
+>>> configuracion/calculos.concentracion = {"quimicos":{"NaOH":{"alpha":0.02,"m":"x"}}}   [mixto: alpha=0.02 (válido) y m='x' (inválido)]
+
+==================== 8. ALCALINA con override MIXTO (α válido se aplica, m inválido se ignora) ====================
+POST ttnUplink → HTTP 201 {"ok":true,"lecturaId":"5349434950000099_1795454069","alertas":0,"descartadas":{}}
+
+--- lecturas/5349434950000099_1795454069  (resumen)
+{
+  "etapa": "alcalino",
+  "valores": {
+    "ph": 13.2,
+    "conductividad": 14000,
+    "tempSonda": 45,
+    "tempEc": 45,
+    "tempExterna": null
+  },
+  "derivados": {
+    "conductividad25C": 10000
+  },
+  "confianza": {
+    "ph": "medido",
+    "conductividad": "medido",
+    "tempSonda": "medido",
+    "tempEc": "medido",
+    "conductividad25C": "medido"
+  },
+  "quimica": {
+    "fase": "soda",
+    "quimico": "NaOH",
+    "kappa25": 10000,
+    "concentracionQuimica": 0.2,
+    "confianza": "estimado",
+    "motivo": null,
+    "metodo": "κ25 = EC / (1 + 0.02·(T−25)), T=45 °C (tempEc); % = (κ25[mS/cm] − 0) / 50 (curva de ejemplo, sin calibrar)"
+  }
+}
+
+--- ciclos/CIP-QUIM-TEST.ultimaLectura.wqs-quimica-01  (resumen)
+{
+  "ts": "2026-11-23T17:14:29.000Z",
+  "valores": {
+    "ph": 13.2,
+    "conductividad": 14000,
+    "tempSonda": 45,
+    "tempEc": 45,
+    "tempExterna": null
+  },
+  "confianza": {
+    "ph": "medido",
+    "conductividad": "medido",
+    "tempSonda": "medido",
+    "tempEc": "medido",
+    "conductividad25C": "medido"
+  },
+  "descartadas": {},
+  "quimica": {
+    "fase": "soda",
+    "quimico": "NaOH",
+    "kappa25": 10000,
+    "concentracionQuimica": 0.2,
+    "confianza": "estimado",
+    "motivo": null,
+    "metodo": "κ25 = EC / (1 + 0.02·(T−25)), T=45 °C (tempEc); % = (κ25[mS/cm] − 0) / 50 (curva de ejemplo, sin calibrar)"
+  }
+}
+✔ quimica de la lectura y de ultimaLectura coinciden con calcularQuimica y con el cálculo manual
+
+✔ configuracion/calculos restaurado
+
+Todo OK: 8 lecturas guardadas en ciclos/CIP-QUIM-TEST
+Datos de prueba borrados (CIP-QUIM-TEST, wqs-quimica-01, cip-quimica).
+codigo de salida: 0

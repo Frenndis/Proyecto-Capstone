@@ -1,0 +1,133 @@
+# npm run test:reglas (functions) · 2026-11-23 14:12 · commit 44205a9 · emuladores de Firebase (proyecto stormcip-dev)
+The CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.
+
+ RUN  v2.1.9 C:/Users/fcarr/Dev/Personal/Proyecto-Capstone/AV_AM_800_Grupo01/Fase 2/Evidencias Proyecto/Evidencias de sistema/Aplicación/stormcip/functions
+
+ ✓ reglas/firestore.rules.test.ts > ciclos > admin y operador crean y actualizan 416ms
+stderr | reglas/firestore.rules.test.ts > ciclos > el visor y el anónimo no escriben
+[2026-11-23T17:12:40.232Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x814ba479 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L25, false for 'update' @ L25
+
+stderr | reglas/firestore.rules.test.ts > ciclos > el visor y el anónimo no escriben
+[2026-11-23T17:12:40.256Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x814ba47a error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L25, false for 'update' @ L25
+
+ ✓ reglas/firestore.rules.test.ts > ciclos > el visor y el anónimo no escriben
+stderr | reglas/firestore.rules.test.ts > ciclos > nadie borra un ciclo, ni siquiera un admin
+[2026-11-23T17:12:40.307Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x814ba47c error. Code: 7 Message: 7 PERMISSION_DENIED: No matching allow statements
+
+stderr | reglas/firestore.rules.test.ts > ciclos > nadie borra un ciclo, ni siquiera un admin
+[2026-11-23T17:12:40.336Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x814ba47d error. Code: 7 Message: 7 PERMISSION_DENIED: No matching allow statements
+
+ ✓ reglas/firestore.rules.test.ts > ciclos > nadie borra un ciclo, ni siquiera un admin
+ ✓ reglas/firestore.rules.test.ts > ciclos > lee quien tiene un rol; el anónimo no
+stderr | reglas/firestore.rules.test.ts > ciclos > las lecturas solo las escribe el backend
+[2026-11-23T17:12:40.501Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x814ba481 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L31, false for 'create' @ L40, false for 'update' @ L31, false for 'update' @ L40
+
+ ✓ reglas/firestore.rules.test.ts > ciclos > las lecturas solo las escribe el backend
+stderr | reglas/firestore.rules.test.ts > reglas existentes que no deben cambiar > alertas: el operador solo puede reconocer
+[2026-11-23T17:12:40.610Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x814ba484 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L45:24 for 'update' @ L45, false for 'update' @ L45
+
+stderr | reglas/firestore.rules.test.ts > reglas existentes que no deben cambiar > alertas: el operador solo puede reconocer
+[2026-11-23T17:12:40.635Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x814ba485 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L47, evaluation error at L45:24 for 'update' @ L45, false for 'create' @ L47
+
+ ✓ reglas/firestore.rules.test.ts > reglas existentes que no deben cambiar > alertas: el operador solo puede reconocer
+stderr | reglas/firestore.rules.test.ts > reglas existentes que no deben cambiar > dispositivos: solo lee un admin y nadie escribe
+[2026-11-23T17:12:40.748Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x814ba489 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L51, false for 'update' @ L51
+
+ ✓ reglas/firestore.rules.test.ts > reglas existentes que no deben cambiar > dispositivos: solo lee un admin y nadie escribe
+stderr | reglas/firestore.rules.test.ts > reglas existentes que no deben cambiar > estadoProceso: lee quien tiene rol, nadie escribe
+[2026-11-23T17:12:40.828Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x814ba48c error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L56, false for 'update' @ L56
+
+ ✓ reglas/firestore.rules.test.ts > reglas existentes que no deben cambiar > estadoProceso: lee quien tiene rol, nadie escribe
+stderr | reglas/firestore.rules.test.ts > reglas existentes que no deben cambiar > configuracion: lee quien tiene rol, escribe solo el admin
+[2026-11-23T17:12:40.916Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x814ba490 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L81, false for 'update' @ L81
+
+ ✓ reglas/firestore.rules.test.ts > reglas existentes que no deben cambiar > configuracion: lee quien tiene rol, escribe solo el admin
+ ✓ reglas/firestore.rules.test.ts > simulacionControl (orden del botón de la demo) > un admin inicia con escenario normal o falla
+ ✓ reglas/firestore.rules.test.ts > simulacionControl (orden del botón de la demo) > un admin detiene, sin escenario
+stderr | reglas/firestore.rules.test.ts > simulacionControl (orden del botón de la demo) > el operador, el visor y el anónimo no escriben
+[2026-11-23T17:12:41.060Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x814ba494 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L63, false for 'update' @ L63
+
+stderr | reglas/firestore.rules.test.ts > simulacionControl (orden del botón de la demo) > el operador, el visor y el anónimo no escriben
+[2026-11-23T17:12:41.093Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x814ba495 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L63, false for 'update' @ L63
+
+stderr | reglas/firestore.rules.test.ts > simulacionControl (orden del botón de la demo) > el operador, el visor y el anónimo no escriben
+[2026-11-23T17:12:41.117Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x814ba496 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L63, false for 'update' @ L63
+
+ ✓ reglas/firestore.rules.test.ts > simulacionControl (orden del botón de la demo) > el operador, el visor y el anónimo no escriben
+stderr | reglas/firestore.rules.test.ts > simulacionControl (orden del botón de la demo) > rechaza comando o escenario inválidos
+[2026-11-23T17:12:41.159Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x814ba497 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L63:32 for 'create' @ L63, evaluation error at L63:32 for 'update' @ L63, false for 'create' @ L63
+
+stderr | reglas/firestore.rules.test.ts > simulacionControl (orden del botón de la demo) > rechaza comando o escenario inválidos
+[2026-11-23T17:12:41.190Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x814ba498 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L63:32 for 'create' @ L63, evaluation error at L63:32 for 'update' @ L63, false for 'create' @ L63
+
+ ✓ reglas/firestore.rules.test.ts > simulacionControl (orden del botón de la demo) > rechaza comando o escenario inválidos
+stderr | reglas/firestore.rules.test.ts > simulacionControl (orden del botón de la demo) > iniciar exige escenario
+[2026-11-23T17:12:41.238Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x814ba499 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L63:32 for 'create' @ L63, evaluation error at L63:32 for 'update' @ L63, Property escenario is undefined on object. for 'create' @ L63
+
+ ✓ reglas/firestore.rules.test.ts > simulacionControl (orden del botón de la demo) > iniciar exige escenario
+stderr | reglas/firestore.rules.test.ts > simulacionControl (orden del botón de la demo) > rechaza campos de más y campos de menos
+[2026-11-23T17:12:41.278Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x814ba49a error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L63:32 for 'create' @ L63, evaluation error at L63:32 for 'update' @ L63, false for 'create' @ L63
+
+stderr | reglas/firestore.rules.test.ts > simulacionControl (orden del botón de la demo) > rechaza campos de más y campos de menos
+[2026-11-23T17:12:41.318Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x814ba49b error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L63:32 for 'create' @ L63, evaluation error at L63:32 for 'update' @ L63, false for 'create' @ L63
+
+ ✓ reglas/firestore.rules.test.ts > simulacionControl (orden del botón de la demo) > rechaza campos de más y campos de menos
+stderr | reglas/firestore.rules.test.ts > simulacionControl (orden del botón de la demo) > solicitadoPor debe ser el usuario que escribe
+[2026-11-23T17:12:41.356Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x814ba49c error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L63:32 for 'create' @ L63, evaluation error at L63:32 for 'update' @ L63, false for 'create' @ L63
+
+ ✓ reglas/firestore.rules.test.ts > simulacionControl (orden del botón de la demo) > solicitadoPor debe ser el usuario que escribe
+stderr | reglas/firestore.rules.test.ts > simulacionControl (orden del botón de la demo) > solicitadoEn debe ser la hora del servidor, no la del cliente
+[2026-11-23T17:12:41.392Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x814ba49d error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L63, false for 'update' @ L63
+
+ ✓ reglas/firestore.rules.test.ts > simulacionControl (orden del botón de la demo) > solicitadoEn debe ser la hora del servidor, no la del cliente
+stderr | reglas/firestore.rules.test.ts > simulacionControl (orden del botón de la demo) > solicitudId: string de 8 a 64 caracteres
+[2026-11-23T17:12:41.423Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x814ba49e error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L63:32 for 'create' @ L63, evaluation error at L63:32 for 'update' @ L63, false for 'create' @ L63
+
+stderr | reglas/firestore.rules.test.ts > simulacionControl (orden del botón de la demo) > solicitudId: string de 8 a 64 caracteres
+[2026-11-23T17:12:41.454Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x814ba49f error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L63:32 for 'create' @ L63, evaluation error at L63:32 for 'update' @ L63, false for 'create' @ L63
+
+stderr | reglas/firestore.rules.test.ts > simulacionControl (orden del botón de la demo) > solicitudId: string de 8 a 64 caracteres
+[2026-11-23T17:12:41.481Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x814ba4a0 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+evaluation error at L63:32 for 'create' @ L63, evaluation error at L63:32 for 'update' @ L63, false for 'create' @ L63
+
+ ✓ reglas/firestore.rules.test.ts > simulacionControl (orden del botón de la demo) > solicitudId: string de 8 a 64 caracteres
+stderr | reglas/firestore.rules.test.ts > simulacionControl (orden del botón de la demo) > lee quien tiene rol; nadie borra
+[2026-11-23T17:12:41.604Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x814ba4a4 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L72
+
+ ✓ reglas/firestore.rules.test.ts > simulacionControl (orden del botón de la demo) > lee quien tiene rol; nadie borra
+stderr | reglas/firestore.rules.test.ts > simulacionEstado (latido del simulador) > lee quien tiene rol; nadie escribe desde el cliente
+[2026-11-23T17:12:41.709Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x814ba4a8 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L77, false for 'update' @ L77
+
+stderr | reglas/firestore.rules.test.ts > simulacionEstado (latido del simulador) > lee quien tiene rol; nadie escribe desde el cliente
+[2026-11-23T17:12:41.730Z]  @firebase/firestore: Firestore (12.19.0): GrpcConnection RPC 'Write' stream 0x814ba4a9 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'update' @ L77
+
+ ✓ reglas/firestore.rules.test.ts > simulacionEstado (latido del simulador) > lee quien tiene rol; nadie escribe desde el cliente
+
+ Test Files  1 passed (1)
+      Tests  20 passed (20)
+   Start at  14:12:37
+   Duration  4.34s (transform 44ms, setup 0ms, collect 1.99s, tests 2.13s, environment 0ms, prepare 79ms)
+

@@ -1,0 +1,216 @@
+# npm test (web) · 2026-11-23 14:12 · commit 44205a9
+
+ RUN  v2.1.9 C:/Users/fcarr/Dev/Personal/Proyecto-Capstone/AV_AM_800_Grupo01/Fase 2/Evidencias Proyecto/Evidencias de sistema/Aplicación/stormcip/web
+
+ ✓ src/lib/catalogo.test.ts > CATALOGO_SONDAS de la web > es idéntico al de functions/src/types.ts
+ ✓ src/lib/proyeccionEnjuague.test.ts > formatearDuracion > usa segundos bajo un minuto y minutos desde ahí
+ ✓ src/lib/proyeccionEnjuague.test.ts > avisoProyeccion > una proyección muestra el plazo, el intervalo y se marca como estimada
+ ✓ src/lib/proyeccionEnjuague.test.ts > avisoProyeccion > con plazo cero no muestra un «0 s» sin sentido
+ ✓ src/lib/proyeccionEnjuague.test.ts > avisoProyeccion > cuando ya cumple, lo dice sin insinuar que la etapa se acorta sola
+ ✓ src/lib/proyeccionEnjuague.test.ts > avisoProyeccion > si no converge, avisa y no muestra ningún plazo
+ ✓ src/lib/proyeccionEnjuague.test.ts > avisoProyeccion > con pocas lecturas, indica que está reuniendo datos
+ ✓ src/lib/proyeccionEnjuague.test.ts > avisoProyeccion > no muestra una proyección de otra etapa
+ ✓ src/lib/proyeccionEnjuague.test.ts > avisoProyeccion > no muestra nada en un ciclo cerrado, sin proyección o sin equipo
+ ✓ src/lib/tipos.test.ts > estadoIndicadores > pendiente si el trigger no ha corrido
+ ✓ src/lib/tipos.test.ts > estadoIndicadores > pendiente aunque haya indicadores, si falta la marca de cálculo
+ ✓ src/lib/tipos.test.ts > estadoIndicadores > sin_lecturas cuando el ciclo cerró sin lecturas monitoreadas
+ ✓ src/lib/tipos.test.ts > estadoIndicadores > sin_lecturas si falta lecturasConsideradas
+ ✓ src/lib/tipos.test.ts > estadoIndicadores > sin_valores cuando hubo lecturas pero ningún indicador numérico
+ ✓ src/lib/tipos.test.ts > estadoIndicadores > listo con las claves presentes, en orden de proceso
+ ✓ src/lib/tipos.test.ts > estadoIndicadores > ignora derivados que no son del ciclo
+ ✓ src/lib/tipos.test.ts > estadoIndicadores > cuenta un indicador en 0 como presente
+ ✓ src/lib/tipos.test.ts > formatear > usa los decimales declarados por variable
+ ✓ src/lib/tipos.test.ts > formatear > devuelve guión cuando no hay dato
+ ✓ src/lib/tipos.test.ts > formatearRango > solo máximo
+ ✓ src/lib/tipos.test.ts > formatearRango > solo mínimo
+ ✓ src/lib/tipos.test.ts > formatearRango > ambos límites
+ ✓ src/lib/tipos.test.ts > formatearRango > ninguno
+ ✓ src/lib/tipos.test.ts > formatearRango > trata null como límite ausente
+ ✓ src/lib/tipos.test.ts > formatearRango > acepta 0 como límite válido
+ ✓ src/lib/tipos.test.ts > estaDetenido > no está detenido si se actualizó hace menos de 10 s
+ ✓ src/lib/tipos.test.ts > estaDetenido > está detenido si pasaron más de 10 s
+ ✓ src/lib/tipos.test.ts > estaDetenido > null (serverTimestamp sin confirmar) cuenta como recién escrito
+ ✓ src/lib/tipos.test.ts > estaDetenido > sin marca de tiempo se considera detenido
+ ✓ src/lib/tipos.test.ts > limiteAlerta > saturación: ≥ tope, no ≤
+ ✓ src/lib/tipos.test.ts > limiteAlerta > umbral de proceso: como formatearRango
+ ✓ src/lib/tipos.test.ts > limiteAlerta > alerta antigua sin tipo: como formatearRango
+ ✓ src/lib/tipos.test.ts > textoUmbralAlerta > solo máximo
+ ✓ src/lib/tipos.test.ts > textoUmbralAlerta > solo mínimo
+ ✓ src/lib/tipos.test.ts > textoUmbralAlerta > ambos límites
+ ✓ src/lib/tipos.test.ts > textoUmbralAlerta > sin umbral
+ ✓ src/lib/tipos.test.ts > textoUmbralAlerta > un límite 0 es válido
+ ✓ src/lib/serieTendencia.test.ts > mediana > impar, par y vacío
+ ✓ src/lib/serieTendencia.test.ts > construirSerie > usa tiempo real en ms, ordenado aunque lleguen desordenadas
+ ✓ src/lib/serieTendencia.test.ts > construirSerie > toma derivados cuando la variable no es medida
+ ✓ src/lib/serieTendencia.test.ts > construirSerie > ignora lecturas sin valor (null, ausente) o sin ts
+ ✓ src/lib/serieTendencia.test.ts > construirSerie > eje X: del inicio del ciclo al fin dado
+ ✓ src/lib/serieTendencia.test.ts > construirSerie > sin inicio ni fin usa la primera y la última lectura
+ ✓ src/lib/serieTendencia.test.ts > construirSerie > una lectura anterior al inicio extiende el eje en vez de perderse
+ ✓ src/lib/serieTendencia.test.ts > construirSerie > el fin nunca queda antes de la última lectura
+ ✓ src/lib/serieTendencia.test.ts > construirSerie > sin datos: serie vacía con eje válido
+ ✓ src/lib/serieTendencia.test.ts > construirSerie > huecos > cadencia uniforme: no corta nada
+ ✓ src/lib/serieTendencia.test.ts > construirSerie > huecos > un intervalo mayor que FACTOR_HUECO × mediana inserta un punto sin valor en medio
+ ✓ src/lib/serieTendencia.test.ts > construirSerie > huecos > exactamente el límite no es hueco
+ ✓ src/lib/serieTendencia.test.ts > construirSerie > huecos > con pocas lecturas no hay cadencia: no corta
+ ✓ src/lib/serieTendencia.test.ts > construirSerie > huecos > el umbral se adapta a la cadencia (20 min)
+ ✓ src/lib/serieTendencia.test.ts > construirSerie: confianza y filtro por etapa > cada punto conserva la confianza de la variable graficada
+ ✓ src/lib/serieTendencia.test.ts > construirSerie: confianza y filtro por etapa > soloEtapas deja fuera las demás (y las lecturas sin etapa)
+ ✓ src/lib/serieTendencia.test.ts > construirSerie: confianza y filtro por etapa > al filtrar, una etapa omitida larga corta la línea
+ ✓ src/lib/serieTendencia.test.ts > franjasPorEtapa > la primera franja arranca en el inicio y la última llega al fin
+ ✓ src/lib/serieTendencia.test.ts > franjasPorEtapa > el límite entre etapas es el punto medio entre la última lectura de una y la primera de la siguiente
+ ✓ src/lib/serieTendencia.test.ts > franjasPorEtapa > las franjas son contiguas, sin superponerse
+ ✓ src/lib/serieTendencia.test.ts > franjasPorEtapa > si la etapa actual ya cambió, la última franja no se estira hasta ahora
+ ✓ src/lib/serieTendencia.test.ts > franjasPorEtapa > si la etapa actual es la de la última lectura, llega hasta ahora
+ ✓ src/lib/serieTendencia.test.ts > franjasPorEtapa > una etapa que reaparece genera otra franja
+ ✓ src/lib/serieTendencia.test.ts > franjasPorEtapa > usa todas las lecturas aunque no tengan valor en la variable
+ ✓ src/lib/serieTendencia.test.ts > franjasPorEtapa > sin lecturas o sin etapa: no hay franjas
+ ✓ src/lib/volumenCirculado.test.ts > estadoVolumen: estados sin datos > sin volumenCirculado y sin caudal: 'sin caudal', nunca 0 L
+ ✓ src/lib/volumenCirculado.test.ts > estadoVolumen: estados sin datos > ciclo cerrado sin volumen (anterior a esta función): sin caudal aunque haya caudal de planta
+ ✓ src/lib/volumenCirculado.test.ts > estadoVolumen: estados sin datos > ciclo en curso con caudal pero sin suma todavía: acumulando
+ ✓ src/lib/volumenCirculado.test.ts > estadoVolumen: estados sin datos > un caudal de 0 m³/h es un caudal informado: acumulando, no 'sin caudal'
+ ✓ src/lib/volumenCirculado.test.ts > estadoVolumen: ciclo finalizado completo > filas en el orden del ciclo
+ ✓ src/lib/volumenCirculado.test.ts > estadoVolumen: ciclo finalizado completo > el agua sale del circulado de la etapa y no es estimada
+ ✓ src/lib/volumenCirculado.test.ts > estadoVolumen: ciclo finalizado completo > soda y ácido salen de consumos (retención), estimados, con el recirculado aparte
+ ✓ src/lib/volumenCirculado.test.ts > estadoVolumen: ciclo finalizado completo > el recirculado de soda y ácido NO entra en ningún total
+ ✓ src/lib/volumenCirculado.test.ts > estadoVolumen: ciclo finalizado completo > el total de agua de red es la suma de sus filas y la recuperada va separada, sin duplicarse
+ ✓ src/lib/volumenCirculado.test.ts > estadoVolumen: ciclo finalizado completo > la desinfección se rotula como agua con sanitizante, con el sanitizante sin dato
+ ✓ src/lib/volumenCirculado.test.ts > estadoVolumen: ciclo finalizado completo > enjuagues en azul (monitoreada) y etapas químicas en ámbar
+ ✓ src/lib/volumenCirculado.test.ts > estadoVolumen: ciclo en curso > la etapa que no corrió queda sin valor, no en 0
+ ✓ src/lib/volumenCirculado.test.ts > estadoVolumen: ciclo en curso > mientras corre el alcalino consumos.soda vale 0 pero NO se muestra: la etapa no terminó
+ ✓ src/lib/volumenCirculado.test.ts > estadoVolumen: ciclo en curso > al pasar al enjuague el alcalino ya terminó y muestra su consumo
+ ✓ src/lib/volumenCirculado.test.ts > estadoVolumen: ciclo en curso > el agua en curso muestra lo acumulado hasta ahora
+ ✓ src/lib/volumenCirculado.test.ts > estadoVolumen: casos límite > sin consumos en el ciclo: soda y ácido 'sin dato', el agua sigue
+ ✓ src/lib/volumenCirculado.test.ts > estadoVolumen: casos límite > ciclo abortado: las etapas con dato muestran su consumo
+ ✓ src/lib/volumenCirculado.test.ts > estadoVolumen: casos límite > la desinfección sin volumen no aparece
+ ✓ src/lib/volumenCirculado.test.ts > estadoVolumen: casos límite > lleva la marca de simulado y los huecos
+ ✓ src/lib/volumenCirculado.test.ts > formateo > formatearLitros: enteros con separador de miles
+ ✓ src/lib/volumenCirculado.test.ts > formateo > formatearM3: 3 decimales bajo 10 m³ y litros entre paréntesis bajo 1 m³
+ ✓ src/lib/volumenCirculado.test.ts > formateo > formatearM3: desde 10 m³ usa 2 decimales
+ ✓ src/lib/volumenCirculado.test.ts > formateo > sin valor muestra una raya, no 0
+ ✓ src/lib/volumenCirculado.test.ts > formateo > formatearUso: agua en m³, soluciones químicas en litros
+ ✓ src/lib/planta.test.ts > tact > todo en rango durante la soda
+ ✓ src/lib/planta.test.ts > tact > bajo el mínimo ya caliente es desvío y pausa el conteo
+ ✓ src/lib/planta.test.ts > tact > mientras calienta no es desvío
+ ✓ src/lib/planta.test.ts > tact > en un enjuague la concentración es conductividad y agua limpia
+ ✓ src/lib/planta.test.ts > aviso > explica la fase en curso
+ ✓ src/lib/planta.test.ts > aviso > avisa el desvío
+ ✓ src/lib/planta.test.ts > aviso > dice cuándo el enjuague ya está limpio
+ ✓ src/lib/planta.test.ts > aviso > al cerrar emite el registro según su resultado
+ ✓ src/lib/planta.test.ts > estadoCiclo y resumenDia > nombra cada estado
+ ✓ src/lib/planta.test.ts > estadoCiclo y resumenDia > cuenta y suma el agua en m³
+ ✓ src/lib/planta.test.ts > fases > ubica un instante en su fase
+ ✓ src/lib/planta.test.ts > fases > mmss rellena con ceros
+ ✓ src/lib/planta.test.ts > consumos > el período incluye el inicio y excluye el fin
+ ✓ src/lib/planta.test.ts > consumos > describe la variación con su dirección
+ ✓ src/lib/planta.test.ts > consumos > incluye días sin ciclos y termina hoy
+ ✓ src/lib/planta.test.ts > consumos > ordena los circuitos por agua
+ ✓ src/lib/planta.test.ts > consumos > calcula el % validado por semana
+ ✓ src/lib/planta.test.ts > consumos > conoce los días libres de cada circuito
+ ✓ src/lib/historialPlanta.test.ts > agregarMuestra > agrega muestras con forma de lectura, en orden
+ ✓ src/lib/historialPlanta.test.ts > agregarMuestra > ignora una muestra repetida o anterior y devuelve el mismo objeto
+ ✓ src/lib/historialPlanta.test.ts > agregarMuestra > espera la hora confirmada: un serverTimestamp pendiente (null) no suma
+ ✓ src/lib/historialPlanta.test.ts > agregarMuestra > reinicia al cambiar de ciclo
+ ✓ src/lib/historialPlanta.test.ts > agregarMuestra > no pasa del tope de muestras
+ ✓ src/lib/tendencia.test.ts > rangoFase > da los límites de cada variable según la fase
+ ✓ src/lib/tendencia.test.ts > estadosEn > mientras la fase calienta no exige el rango
+ ✓ src/lib/tendencia.test.ts > estadosEn > estable y lejos del límite: ok
+ ✓ src/lib/tendencia.test.ts > estadosEn > avisa que tiende a salir ANTES de cruzar el mínimo
+ ✓ src/lib/tendencia.test.ts > estadosEn > bajo el mínimo: fuera; y al recuperarse vuelve a ok
+ ✓ src/lib/tendencia.test.ts > estadosEn > el ruido normal de la medición no dispara avisos
+ ✓ src/lib/tendencia.test.ts > proyectar > fin del ciclo: lo que falta de receta, con confianza 1 − riesgo antes de pasar la soda
+ ✓ src/lib/tendencia.test.ts > proyectar > con la temperatura fuera de rango, la confianza del fin del ciclo baja
+ ✓ src/lib/tendencia.test.ts > proyectar > en el enjuague proyecta cuándo llega a agua limpia y gana confianza con más lecturas
+ ✓ src/lib/tendencia.test.ts > proyectar > con menos de 4 lecturas del enjuague todavía reúne datos
+ ✓ src/lib/tendencia.test.ts > proyectar > cuando ya cumple el criterio informa desde cuándo
+ ✓ src/lib/tendencia.test.ts > proyectar > si la caída es muy lenta, dice que no alcanza dentro de la fase
+ ✓ src/lib/tendencia.test.ts > avisosCiclo > deja la secuencia tiende → fuera → volvió, una vez cada uno
+ ✓ src/lib/tendencia.test.ts > avisosCiclo > un ciclo normal no deja avisos
+ ✓ src/lib/tendencia.test.ts > avisosCiclo > avisa una vez si el enjuague no va a llegar a agua limpia
+ ✓ src/lib/tendencia.test.ts > apoyo > regresion recupera la recta
+ ✓ src/lib/tendencia.test.ts > apoyo > enMinutos y nivelConfianza
+ ✓ src/lib/tendencia.test.ts > apoyo > segmentosPeriodo ordena por inicio, separa los ciclos y reduce puntos
+ ✓ src/lib/controlSimulacion.test.ts > seguirLatido / latidoVivo > sin documento o sin contador: apagado
+ ✓ src/lib/controlSimulacion.test.ts > seguirLatido / latidoVivo > el primer valor no prueba que esté vivo: hay que ver un cambio
+ ✓ src/lib/controlSimulacion.test.ts > seguirLatido / latidoVivo > un cambio del contador lo da por vivo durante VIVO_MS
+ ✓ src/lib/controlSimulacion.test.ts > seguirLatido / latidoVivo > el mismo valor repetido (snapshot sin cambio) no renueva
+ ✓ src/lib/controlSimulacion.test.ts > seguirLatido / latidoVivo > si el simulador se reinicia y el contador baja, también cuenta como cambio
+ ✓ src/lib/controlSimulacion.test.ts > seguirLatido / latidoVivo > si el documento desaparece, vuelve a apagado
+ ✓ src/lib/controlSimulacion.test.ts > armarOrden > iniciar lleva escenario
+ ✓ src/lib/controlSimulacion.test.ts > armarOrden > detener no lleva escenario (las reglas no lo piden)
+ ✓ src/lib/controlSimulacion.test.ts > resultadoDeOrden > sin orden en vuelo: nada
+ ✓ src/lib/controlSimulacion.test.ts > resultadoDeOrden > esperando mientras el simulador no la haya procesado
+ ✓ src/lib/controlSimulacion.test.ts > resultadoDeOrden > aceptada cuando el simulador publica su solicitudId sin rechazo
+ ✓ src/lib/controlSimulacion.test.ts > resultadoDeOrden > rechazada con el motivo
+ ✓ src/lib/controlSimulacion.test.ts > resultadoDeOrden > sin respuesta pasado RESPUESTA_MAX_MS
+ ✓ src/lib/controlSimulacion.test.ts > estadoBoton > simulador vivo, libre y sin ciclo: se puede iniciar, no detener
+ ✓ src/lib/controlSimulacion.test.ts > estadoBoton > simulador apagado: nada habilitado
+ ✓ src/lib/controlSimulacion.test.ts > estadoBoton > sin documento de estado: tampoco hay nada que habilitar
+ ✓ src/lib/controlSimulacion.test.ts > estadoBoton > simulación en marcha: se puede detener, no iniciar
+ ✓ src/lib/controlSimulacion.test.ts > estadoBoton > hay un ciclo en curso que no es de la simulación: no inicia y avisa cuál
+ ✓ src/lib/controlSimulacion.test.ts > estadoBoton > con una orden en vuelo (doble clic): nada habilitado
+ ✓ src/lib/controlSimulacion.test.ts > estadoBoton > simulador apagado con estado 'ejecutando' viejo: no deja detener
+ ✓ src/lib/controlSimulacion.test.ts > selección de línea > lineaDe
+ ✓ src/lib/controlSimulacion.test.ts > selección de línea > leerSeleccion acepta lo válido y cae a 'todas' con cualquier otra cosa
+ ✓ src/lib/controlSimulacion.test.ts > selección de línea > hay una etiqueta por selección
+ ✓ src/lib/controlSimulacion.test.ts > selección de línea > ultimoFinalizado toma el primero finalizado de la lista ya ordenada
+ ✓ src/lib/tarjetas.test.ts > variablesAMostrar > deja solo lo que miden las sondas configuradas, en orden de proceso
+ ✓ src/lib/tarjetas.test.ts > variablesAMostrar > no muestra tarjetas de una sonda inactiva (configuración anterior)
+ ✓ src/lib/tarjetas.test.ts > variablesAMostrar > turbidez y tempExterna solo aparecen si el equipo tiene esas sondas
+ ✓ src/lib/tarjetas.test.ts > variablesAMostrar > conductividad25C aparece junto a la conductividad aunque nunca se calculó
+ ✓ src/lib/tarjetas.test.ts > variablesAMostrar > sin sondas registradas no filtra, pero los derivados no tienen tarjeta
+ ✓ src/lib/tarjetas.test.ts > variablesAMostrar > sin variablesVistas no hay tarjetas
+ ✓ src/lib/tarjetas.test.ts > topeDe > sale de CATALOGO_SONDAS según la sonda del equipo
+ ✓ src/lib/tarjetas.test.ts > topeDe > undefined si el equipo no tiene esa sonda o está inactiva
+ ✓ src/lib/tarjetas.test.ts > estadoTarjeta > normal
+ ✓ src/lib/tarjetas.test.ts > estadoTarjeta > saturado: el tope sale del catálogo
+ ✓ src/lib/tarjetas.test.ts > estadoTarjeta > fuera de operación conserva el valor para mostrarlo atenuado
+ ✓ src/lib/tarjetas.test.ts > estadoTarjeta > sin dato: usa el motivo de descartadas
+ ✓ src/lib/tarjetas.test.ts > estadoTarjeta > sin dato: sensor no conectado (null) y variable ausente en la última lectura
+ ✓ src/lib/tarjetas.test.ts > estadoTarjeta > sin lectura del equipo
+ ✓ src/lib/tarjetas.test.ts > estadoTarjeta > conductividad25C > con derivado: normal
+ ✓ src/lib/tarjetas.test.ts > estadoTarjeta > conductividad25C > derivado saturado: cota inferior, el tope es el propio valor calculado
+ ✓ src/lib/tarjetas.test.ts > estadoTarjeta > conductividad25C > sin temperatura: valor crudo, sin compensar, causa 'falta la temperatura'
+ ✓ src/lib/tarjetas.test.ts > estadoTarjeta > conductividad25C > temperatura null (sensor no conectado) cuenta como falta de temperatura
+ ✓ src/lib/tarjetas.test.ts > estadoTarjeta > conductividad25C > temperatura saturada / fuera de operación
+ ✓ src/lib/tarjetas.test.ts > estadoTarjeta > conductividad25C > conductividad fuera de operación
+ ✓ src/lib/tarjetas.test.ts > estadoTarjeta > conductividad25C > usa la misma temperatura que el backend: tempEc antes que tempSonda
+ ✓ src/lib/tarjetas.test.ts > estadoTarjeta > conductividad25C > si la causa no se deduce de los datos, no se inventa
+ ✓ src/lib/tarjetas.test.ts > estadoTarjeta > conductividad25C > sin conductividad ni derivado: sin dato con el motivo de la conductividad
+ ✓ src/lib/tarjetas.test.ts > estadoTarjeta > conductividad25C > conductividad saturada y sin temperatura: crudo con el tope del catálogo
+ ✓ src/lib/tarjetas.test.ts > estadoTarjeta > etiqueta fija pedida
+ ✓ src/lib/etapas.test.ts > ETAPAS_ORDEN > es idéntico a ETAPAS del backend
+ ✓ src/lib/etapas.test.ts > ETAPAS_MONITOREADAS > es idéntico al del backend
+ ✓ src/lib/etapas.test.ts > estadoEtapas > las etapas químicas no son monitoreadas
+ ✓ src/lib/etapas.test.ts > estadoEtapas > marca hechas las anteriores, la actual y pendientes las siguientes
+ ✓ src/lib/etapas.test.ts > estadoEtapas > primera y última etapa
+ ✓ src/lib/etapas.test.ts > estadoEtapas > ciclo finalizado: todas hechas
+ ✓ src/lib/etapas.test.ts > estadoEtapas > ciclo abortado: conserva la etapa en que quedó
+ ✓ src/lib/etapas.test.ts > estadoEtapas > etapa desconocida o ausente: todo pendiente, sin adivinar
+ ✓ src/lib/etapas.test.ts > formatearDuracion > mm:ss
+ ✓ src/lib/etapas.test.ts > formatearDuracion > con horas
+ ✓ src/lib/etapas.test.ts > formatearDuracion > sin dato
+ ✓ src/lib/etapas.test.ts > segundosDelCiclo > en curso: hasta ahora
+ ✓ src/lib/etapas.test.ts > segundosDelCiclo > cerrado: hasta fin, no hasta ahora
+ ✓ src/lib/etapas.test.ts > segundosDelCiclo > inicio aún sin confirmar (serverTimestamp): null
+ ✓ src/lib/etapas.test.ts > segundosDelCiclo > nunca negativo (reloj atrasado)
+ ✓ src/lib/etapas.test.ts > procesoDelCiclo > solo si es del mismo ciclo
+ ✓ src/lib/etapas.test.ts > segundosEnEtapa > desde etapaInicio de estadoProceso
+ ✓ src/lib/etapas.test.ts > segundosEnEtapa > null si estadoProceso es de otro ciclo
+ ✓ src/lib/etapas.test.ts > segundosEnEtapa > null si estadoProceso está detenido
+ ✓ src/lib/etapas.test.ts > segundosEnEtapa > null si las fuentes no coinciden en la etapa
+ ✓ src/lib/etapas.test.ts > segundosEnEtapa > null si el ciclo ya no está en curso
+ ✓ src/lib/etapas.test.ts > segundosEnEtapa > null sin etapaInicio confirmado o sin estadoProceso
+ ✓ src/lib/etapas.test.ts > segundosRestantesEtapa > duración de la etapa menos lo transcurrido en ella
+ ✓ src/lib/etapas.test.ts > segundosRestantesEtapa > nunca negativo
+ ✓ src/lib/etapas.test.ts > segundosRestantesEtapa > null si falta la duración o no es válida
+ ✓ src/lib/etapas.test.ts > segundosRestantesEtapa > null si el estado de planta no es vigente
+ ✓ src/lib/etapas.test.ts > segundosRestantesCiclo > duración del ciclo menos transcurrido, sumando lo que pasó desde la última escritura
+ ✓ src/lib/etapas.test.ts > segundosRestantesCiclo > nunca negativo
+ ✓ src/lib/etapas.test.ts > segundosRestantesCiclo > un reloj atrasado no suma tiempo negativo
+ ✓ src/lib/etapas.test.ts > segundosRestantesCiclo > null si no es vigente, no es del ciclo, el ciclo no está en curso o faltan datos
+
+ Test Files  11 passed (11)
+      Tests  206 passed (206)
+   Start at  14:12:26
+   Duration  2.13s (transform 5.89s, setup 0ms, collect 7.09s, tests 194ms, environment 2ms, prepare 8.04s)
+

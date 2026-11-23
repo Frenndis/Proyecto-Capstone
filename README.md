@@ -14,7 +14,7 @@ Proyecto APT / Capstone · Ingeniería Informática · Duoc UC · Grupo AV_AM_80
 
 **Qué problema resuelve.** Hoy los sensores de la planta se ven solo en el PLC y no dejan historial. No hay datos centralizados, las decisiones son reactivas y no se sabe cuánta agua y químico consume cada ciclo. StormCIP transforma esas mediciones en información para controlar y optimizar el proceso.
 
-**Estado actual (octubre 2026).** El backend y el dashboard están desplegados en Firebase y funcionan con datos simulados. La maqueta física está en armado y faltan instalar las sondas. El análisis predictivo está planificado y aún no se implementa.
+**Estado actual (23 de noviembre de 2026).** El backend y la web están desplegados en Firebase (https://stormcip-austral.web.app) y funcionan con una planta de demostración de 8 circuitos con datos simulados. Ya incluye el gráfico por variables y periodo, la proyección en minutos con nivel de confianza, los avisos de tendencia, la administración de usuarios y los planes de limpieza editables. Los modelos predictivos (Random Forest) se entrenan con ciclos simulados. Los sensores están comprados y recibidos; su instalación en la maqueta y las pruebas con datos reales siguen pendientes.
 
 ---
 
@@ -53,7 +53,10 @@ flowchart LR
 | `ingestLectura` | Endpoint HTTP (`/api/ingest`) para gateways o simuladores que envían lecturas ya decodificadas |
 | `alCerrarCiclo` y `recalcularIndicadores` | Calculan los indicadores del ciclo: tiempo hasta agua limpia, arrastre químico, pendiente de conductividad y volumen estimado |
 | `onUserCreated` y `setUserRole` | Asignan el rol por defecto (`visor`) y permiten a un admin cambiar roles |
-| Dashboard web | Muestra tarjetas por sonda, barra de etapas del CIP, tendencias, alertas e indicadores |
+| `iniciarCicloDemo`, `planificarCiclos` y `recalcularDecisiones` | Planta de demostración: ciclo en vivo a 20×, ciclos programados y reentrenamiento de los modelos al cerrar cada ciclo |
+| `asegurarPlanes`, `guardarPlan` y `eliminarPlan` | Planes de limpieza CIP editables por el administrador, con validación en el servidor |
+| `listarUsuarios`, `crearUsuario` y `setUserActivo` | Administración de usuarios: alta con rol, lista y activación |
+| Aplicación web | Central CIP, ciclo en vivo con gráfico por variables y periodo, proyección con confianza y avisos, registros, consumos, predicción, reportes, planes de limpieza y usuarios |
 
 Más detalle en [`EXPLICACION-SISTEMA-SENSORES.md`](AV_AM_800_Grupo01/Fase%202/Evidencias%20Proyecto/Evidencias%20de%20sistema/EXPLICACION-SISTEMA-SENSORES.md) y en el [modelo de datos](AV_AM_800_Grupo01/Fase%202/Evidencias%20Proyecto/Evidencias%20de%20sistema/Base%20de%20datos/modelo-datos-sensores.md).
 
@@ -131,7 +134,21 @@ cd web && npm test                # pruebas unitarias de la web
 cd functions && npm run test:reglas   # reglas de Firestore (requiere el emulador encendido)
 ```
 
+Además hay pruebas de integración y de punta a punta (`npm run sim:ttn`, `e2e-volumen.js`, `e2e-quimica.js`), una prueba de carga (`carga-ingesta.js`) y un recorrido de aceptación automatizado (`uat-recorrido.js`), todos en `scripts/` y solo contra emuladores. El resultado del 23-11-2026 (522 pruebas unitarias, 20 de reglas y 38 casos de aceptación) y su evidencia están en el [plan de pruebas](AV_AM_800_Grupo01/Fase%202/Evidencias%20Proyecto/Evidencias%20de%20documentaci%C3%B3n/Plan%20de%20pruebas/plan-de-pruebas.md).
+
 Más detalle en [`README.md` de la aplicación](AV_AM_800_Grupo01/Fase%202/Evidencias%20Proyecto/Evidencias%20de%20sistema/Aplicaci%C3%B3n/stormcip/README.md). El despliegue a producción se describe en [`DESPLIEGUE.md`](AV_AM_800_Grupo01/Fase%202/Evidencias%20Proyecto/Evidencias%20de%20sistema/Aplicaci%C3%B3n/stormcip/DESPLIEGUE.md); ningún script toca producción sin flags explícitos.
+
+---
+
+## Documentación
+
+| Documento | Para qué sirve |
+|---|---|
+| [Manual de usuario](AV_AM_800_Grupo01/Fase%202/Evidencias%20Proyecto/Evidencias%20de%20documentaci%C3%B3n/Manual%20de%20usuario/manual-de-usuario.md) | Cómo usar cada pantalla, por rol |
+| [Plan de pruebas](AV_AM_800_Grupo01/Fase%202/Evidencias%20Proyecto/Evidencias%20de%20documentaci%C3%B3n/Plan%20de%20pruebas/plan-de-pruebas.md) | Qué se prueba, resultado y evidencia por sprint |
+| [Acta UAT](AV_AM_800_Grupo01/Fase%202/Evidencias%20Proyecto/Evidencias%20de%20documentaci%C3%B3n/Plan%20de%20pruebas/acta-uat.md) | Casos de aceptación ejecutados; pendiente de firma |
+| [Lo comprado y lo construido](AV_AM_800_Grupo01/Fase%202/Evidencias%20Proyecto/Evidencias%20de%20documentaci%C3%B3n/Documentaci%C3%B3n%20t%C3%A9cnica/comprado-y-construido.md) | Inventario de equipos, software y documentos |
+| [Guía de despliegue](AV_AM_800_Grupo01/Fase%202/Evidencias%20Proyecto/Evidencias%20de%20sistema/Aplicaci%C3%B3n/stormcip/DESPLIEGUE.md) | Cómo publicar funciones, reglas y Hosting |
 
 ---
 
@@ -173,6 +190,12 @@ AV_AM_800_Grupo01/
 ├── Fase 1/                        Evidencias de la Fase 1 (definición del proyecto)
 └── Fase 2/
     └── Evidencias Proyecto/
+        ├── Evidencias de documentación/
+        │   ├── Manual de usuario/         Manual con capturas de cada pantalla
+        │   ├── Plan de pruebas/           Plan, acta UAT y evidencia de cada corrida
+        │   ├── Documentación técnica/     Lo comprado y lo construido
+        │   ├── Plan del proyecto/         Backlog, historias de usuario y riesgos
+        │   └── Diagramas UML y de arquitectura
         └── Evidencias de sistema/
             ├── Aplicación/stormcip/       La aplicación
             │   ├── functions/             Cloud Functions (TypeScript)
@@ -180,6 +203,6 @@ AV_AM_800_Grupo01/
             │   ├── scripts/               Seed y simuladores
             │   └── firestore.rules        Reglas de seguridad por rol
             ├── Base de datos/             Modelo de datos y pendientes técnicos
-            ├── Gestion Sensores/          Cotización y orden de compra
+            ├── Gestion Sensores/          Cotización, orden de compra, factura y fotos
             └── Informacion Tecnica Sensores/   Datasheet y firmware del WQS-LB
 ```
