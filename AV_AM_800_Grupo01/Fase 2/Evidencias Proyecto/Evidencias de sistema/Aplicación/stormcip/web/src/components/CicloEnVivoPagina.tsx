@@ -6,11 +6,13 @@ import { useAuth } from "@/lib/auth-context";
 import VistaCiclo from "@/components/VistaCiclo";
 import { Ic } from "@/components/ui/Ic";
 import { gsap, useEntrada } from "@/lib/animacion";
-import { NOMBRES_CIRCUITO, PLANO } from "@/lib/planta";
+import { usePlanes } from "@/hooks/usePlanes";
 
 function Pagina() {
   const { rol } = useAuth();
   const { ciclos, cargando } = useCiclosPlanta(40);
+  const { planes } = usePlanes();
+  const activos = planes.filter((p) => p.activo);
   const pedido = useSearchParams().get("circuito");
   const [circuito, setCircuito] = useState(pedido ?? "and2");
   const [escenario, setEscenario] = useState("normal");
@@ -51,7 +53,7 @@ function Pagina() {
           <>
             <label>Circuito
               <select value={circuito} onChange={(e) => setCircuito(e.target.value)} disabled={iniciando}>
-                {PLANO.nodos.map((n) => <option key={n.id} value={n.id}>{NOMBRES_CIRCUITO[n.id]}</option>)}
+                {activos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
               </select>
             </label>
             <label>Escenario
@@ -60,7 +62,7 @@ function Pagina() {
                 <option value="desvio">Con caída de temperatura</option>
               </select>
             </label>
-            <button className="btn2 btn2--pri" onClick={iniciar} disabled={!puede || iniciando}>
+            <button className="btn2 btn2--pri" onClick={iniciar} disabled={!puede || iniciando || !activos.some((p) => p.id === circuito)}>
               <Ic n="play" />{iniciando ? "Iniciando…" : "Iniciar ciclo de demostración"}
             </button>
             <span style={{ fontSize: 12, color: "var(--ink-3)", marginLeft: "auto" }}>

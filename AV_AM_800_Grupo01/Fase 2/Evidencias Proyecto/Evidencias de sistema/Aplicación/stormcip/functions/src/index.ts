@@ -8,7 +8,7 @@ setGlobalOptions({ region: "southamerica-west1", maxInstances: 10 });
 // ttnUplink en lorawanAdapter.ts. Ambos terminan en procesarLectura().
 export { ingestLectura } from "./http";
 export { ttnUplink } from "./lorawanAdapter";
-export { onUserCreated, setUserRole } from "./auth";
+export { onUserCreated, setUserRole, listarUsuarios, crearUsuario, setUserActivo } from "./auth";
 // Cierre de ciclo: invoca derivarCiclo() y deja los indicadores en el documento.
 export { alCerrarCiclo, recalcularIndicadores } from "./ciclos";
 // Volumen circulado por etapa: integra el caudal de estadoProceso (ver volumenCirculado.ts).
@@ -17,3 +17,5 @@ export { alCambiarEstadoProceso } from "./volumenCirculado";
 export { alCrearLectura } from "./proyeccionEnjuague";
 // Planta de demostración: ciclo en vivo, decisiones y ciclos diarios (ver planta/).
 export { iniciarCicloDemo, recalcularDecisiones, planificarCiclos } from "./planta/funciones";
+// Planes de limpieza CIP editables por el administrador (ver planta/gestionPlanes.ts).
+export { asegurarPlanes, guardarPlan, eliminarPlan } from "./planta/gestionPlanes";

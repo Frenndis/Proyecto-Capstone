@@ -7,9 +7,10 @@ import { onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { FieldValue, Timestamp, getFirestore } from "firebase-admin/firestore";
 import {
-  CIRCUITOS, Contexto, Opciones, cicloCerrado, circuitoPorId, contextoPara, crearSimulador, fasesDelCiclo, litrosPorSDe, probDesvio, puntoDe, resumir,
+  Contexto, Opciones, cicloCerrado, contextoPara, crearSimulador, fasesDelCiclo, litrosPorSDe, probDesvio, puntoDe, resumir,
 } from "./motor";
 import { CicloML, PrediccionCiclo, analizar, entrenarEnVivo } from "./ml";
+import { cargarPlan, cargarPlanes } from "./gestionPlanes";
 
 export const VELOCIDAD = 20;
 const TICK_MS = 1000;
@@ -35,8 +36,9 @@ export const iniciarCicloDemo = onCall({ timeoutSeconds: 540, memory: "1GiB" }, 
   const rol = req.auth?.token.rol;
   if (rol !== "admin" && rol !== "operador") throw new HttpsError("permission-denied", "Solo operación puede iniciar un ciclo");
   const { circuitoId, escenario } = (req.data ?? {}) as { circuitoId?: string; escenario?: string };
-  const c = circuitoPorId(circuitoId ?? "");
+  const c = await cargarPlan(circuitoId ?? "");
   if (!c) throw new HttpsError("invalid-argument", "Circuito desconocido");
+  if (!c.activo) throw new HttpsError("failed-precondition", `El plan de ${c.corto} está desactivado`);
 
   const db = getFirestore();
   const enCurso = await db.collection("ciclos").where("lineaId", "==", c.id).where("estado", "==", "en_curso").limit(1).get();
@@ -120,7 +122,7 @@ async function leerHistoria(circuitoId?: string): Promise<CicloML[]> {
 /** Reentrena los modelos y escribe configuracion/oportunidades. */
 export async function actualizarOportunidades() {
   const db = getFirestore();
-  const r = analizar(await leerHistoria(), Date.now());
+  const r = analizar(await leerHistoria(), Date.now(), await cargarPlanes());
   await db.doc("configuracion/oportunidades").set({ ...r, actualizadoEn: Timestamp.now() });
   return r;
 }
@@ -141,8 +143,8 @@ export const planificarCiclos = onSchedule({ schedule: "every 60 minutes", timeZ
   const hora = horaChile(ahora), dia = diaChile(ahora);
   const db = getFirestore();
   let creados = 0;
-  for (const c of CIRCUITOS) {
-    if (c.hora !== hora || c.libres.includes(dia)) continue;
+  for (const c of await cargarPlanes()) {
+    if (!c.activo || c.hora !== hora || c.libres.includes(dia)) continue;
     const semilla = Math.floor(ahora.getTime() / 3600000) + c.hora * 7;
     const contexto = contextoPara(c, ahora, semilla);
     const o: Opciones = {

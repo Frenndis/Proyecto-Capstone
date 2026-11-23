@@ -51,4 +51,24 @@ export const registrarDecision = (id: string, estado: "aprobada" | "descartada" 
 export const iniciarCiclo = (circuitoId: string, escenario: string) =>
   httpsCallable(functions, "iniciarCicloDemo", { timeout: 540000 })({ circuitoId, escenario });
 
-export const detenerCiclo = (id: string) => updateDoc(doc(db, "ciclos", id), { detener: true });
+/**
+ * Ciclos que empezaron dentro de un periodo, del más antiguo al más nuevo.
+ * `hastaMs` null = sin tope (incluye el ciclo en curso). `desdeMs` null = no consultar.
+ */
+export function useCiclosPeriodo(desdeMs: number | null, hastaMs: number | null, tope = 400) {
+  const clave = `${desdeMs}|${hastaMs}|${tope}`;
+  const [snap, setSnap] = useState<{ clave: string; ciclos: CicloPlanta[]; error?: string } | null>(null);
+  useEffect(() => {
+    if (desdeMs === null) return;
+    const filtros = [where("inicio", ">=", new Date(desdeMs)), ...(hastaMs !== null ? [where("inicio", "<=", new Date(hastaMs))] : [])];
+    // Los más recientes primero para que el tope recorte lo antiguo, no lo último
+    const q = query(collection(db, "ciclos"), ...filtros, orderBy("inicio", "desc"), limit(tope));
+    return onSnapshot(q,
+      (s) => setSnap({ clave, ciclos: s.docs.map((d) => ({ id: d.id, ...d.data() } as CicloPlanta)).filter((c) => c.v === 3).reverse() }),
+      (e) => { console.error("No se pudieron leer los ciclos del periodo:", e); setSnap({ clave, ciclos: [], error: "No se pudieron leer los ciclos del periodo." }); });
+  }, [desdeMs, hastaMs, tope, clave]);
+  const vigente = desdeMs !== null && snap?.clave === clave ? snap : null;
+  return { ciclos: vigente?.ciclos ?? [], cargando: desdeMs !== null && !vigente, error: vigente?.error, recortado: (vigente?.ciclos.length ?? 0) >= tope };
+}
+
+export const detenerCiclo =(id: string) => updateDoc(doc(db, "ciclos", id), { detener: true });

@@ -3,6 +3,7 @@
 import "@/styles/sala-app.css";
 import "@/styles/sala-plataformas.css";
 import "@/styles/sala-pagina.css";
+import "@/styles/gestion.css";
 import AppShell from "@/components/layout/AppShell";
 
 export default function PanelLayout({ children }: { children: React.ReactNode }) {

@@ -19,7 +19,11 @@ const NAV: { href: string; label: string; icono: IconoNombre; titulo?: string }[
 ];
 const SISTEMA: typeof NAV = [
   { href: "/sensores", label: "Sensores WQS-LB", icono: "chip", titulo: "Sensores de la línea piloto" },
-  { href: "/configuracion", label: "Recetas y límites", icono: "grid" },
+  { href: "/configuracion", label: "Planes de limpieza", icono: "grid", titulo: "Planes de limpieza y límites" },
+];
+// Solo para administradores
+const ADMIN: typeof NAV = [
+  { href: "/usuarios", label: "Usuarios", icono: "users", titulo: "Usuarios y roles" },
 ];
 const ROL: Record<string, string> = { admin: "Administrador", operador: "Operador", visor: "Visor" };
 
@@ -42,7 +46,7 @@ function Marco({ children }: { children: React.ReactNode }) {
   const { user, rol, salir } = useAuth();
   const { ciclos } = useCiclosHoy();
   const { oportunidades } = useOportunidades();
-  const todos = [...NAV, ...SISTEMA];
+  const todos = [...NAV, ...SISTEMA, ...ADMIN];
   const actual = todos.find((n) => n.href === ruta);
   const enCurso = ciclos.filter((c) => c.estado === "en_curso").length;
   const alertas = (oportunidades?.decisiones ?? []).filter((d) => d.tipo === "revisar_circuito" || d.tipo === "posible_fuga").length;
@@ -66,6 +70,7 @@ function Marco({ children }: { children: React.ReactNode }) {
           {NAV.map(enlace)}
           <p className="sb__group">Sistema</p>
           {SISTEMA.map(enlace)}
+          {rol === "admin" && ADMIN.map(enlace)}
         </nav>
         <div className="sb__foot">
           <span className="sb__av mono">{user?.email?.slice(0, 2).toUpperCase()}</span>

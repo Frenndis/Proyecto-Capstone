@@ -7,7 +7,7 @@
 // Cada modelo se mide con los ciclos más recientes, que no vio al entrenar, y contra
 // una base simple (el promedio del circuito). Si no le gana, se declara no útil.
 import { RandomForestClassifier, RandomForestRegression } from "ml-random-forest";
-import { CIRCUITOS, Contexto, contextoPara } from "./motor";
+import { CIRCUITOS, Circuito, Contexto, contextoPara } from "./motor";
 import { CicloDecision, Decision, Prediccion, calcularDecisiones, percentil } from "./decisiones";
 
 export const CONFIG_ML = {
@@ -21,7 +21,17 @@ const ARBOL = { maxDepth: 8, minNumSamples: 4 };
 
 export type CicloML = CicloDecision & { contexto?: Contexto };
 
-const iCircuito = (id: string) => CIRCUITOS.findIndex((c) => c.id === id);
+/**
+ * Número estable del circuito para el modelo. Los de fábrica conservan su índice;
+ * un plan creado por el administrador recibe uno propio derivado de su id.
+ */
+export const iCircuito = (id: string) => {
+  const i = CIRCUITOS.findIndex((c) => c.id === id);
+  if (i >= 0) return i;
+  let h = 0;
+  for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return CIRCUITOS.length + (h % 64);
+};
 const baseCtx = (c: Contexto) => [c.horasDesdeUltima, c.carga, c.tempAgua, c.activos, c.diaSemana];
 const NOMBRES_CTX = ["Horas sin limpiar", "Carga de producto", "Temperatura del agua", "Equipos activos", "Día de la semana"];
 
@@ -145,7 +155,7 @@ export type PrediccionCiclo = {
   limpio: Record<string, { s: number; margen: number }>;
 };
 
-export function entrenarModelos(ciclos: CicloML[]) {
+export function entrenarModelos(ciclos: CicloML[], circuitos: Circuito[] = CIRCUITOS) {
   const orden = [...ciclos].filter((c) => c.contexto).sort((a, b) => a.inicioMs - b.inicioMs);
   const limpio: Fila[] = [], vivo: Fila[] = [], agua: Fila[] = [], quim: Fila[] = [], riesgo: Fila[] = [];
   const historia = new Map<string, CicloML[]>();
@@ -185,7 +195,7 @@ export function entrenarModelos(ciclos: CicloML[]) {
   /** Predicción para un ciclo que aún no empieza. */
   function predecirCiclo(circuitoId: string, ctx: Contexto): PrediccionCiclo | null {
     if (!mAgua || !mQuim) return null;
-    const c = CIRCUITOS.find((x) => x.id === circuitoId);
+    const c = circuitos.find((x) => x.id === circuitoId);
     if (!c) return null;
     const ci = iCircuito(circuitoId), r = rolling(circuitoId);
     const limpioPorFase: PrediccionCiclo["limpio"] = {};
@@ -231,15 +241,15 @@ export function entrenarEnVivo(ciclos: CicloML[], circuitoId: string) {
 }
 
 /** Todo lo que publica la pantalla de Predicción: decisiones y modelos. */
-export function analizar(ciclos: CicloML[], ahoraMs: number) {
-  const ml = entrenarModelos(ciclos);
+export function analizar(ciclos: CicloML[], ahoraMs: number, circuitos: Circuito[] = CIRCUITOS) {
+  const ml = entrenarModelos(ciclos, circuitos);
   const base = calcularDecisiones(ciclos, ahoraMs, undefined, { superior: ml.superior, modelo: ml.metricas.find((m) => m.id === "limpio")?.util === true });
   const manana = new Date(ahoraMs + 86400000);
   // Cada predicción guarda las condiciones que supuso: el ciclo de demo corre con esas
   const predicciones: (Prediccion & { ml?: PrediccionCiclo; contexto?: Contexto })[] = base.predicciones.map((p) => {
-    const c = CIRCUITOS.find((x) => x.id === p.circuitoId);
+    const c = circuitos.find((x) => x.id === p.circuitoId);
     if (!c) return p;
-    const contexto = contextoPara(c, manana, Math.floor(ahoraMs / 86400000) + CIRCUITOS.indexOf(c));
+    const contexto = contextoPara(c, manana, Math.floor(ahoraMs / 86400000) + iCircuito(c.id));
     const r = ml.predecirCiclo(p.circuitoId, contexto);
     return r ? { ...p, ml: r, contexto } : p;
   });

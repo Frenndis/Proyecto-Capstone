@@ -1,88 +1,11 @@
 "use client";
-// Ciclo en vivo, como la maqueta Storm CIP: fases proporcionales, curvas por carril,
-// lecturas, validación TACT y sinóptico del lazo. Lee la curva que escribe el backend.
-import { useEffect, useMemo, useRef } from "react";
+// Ciclo en vivo: fases proporcionales, gráfico con variables y periodo a elección,
+// lecturas, proyección con avisos, validación TACT y sinóptico del lazo.
 import { Ic } from "@/components/ui/Ic";
-import { gsap, sinMovimiento } from "@/lib/animacion";
+import GraficoPeriodo from "@/components/GraficoPeriodo";
+import ProyeccionCiclo from "@/components/ProyeccionCiclo";
 import { CicloPlanta, PuntoCurva, aviso, faseEn, inicioFase, mmss, nf, tact } from "@/lib/planta";
-
-const X0 = 46, X1 = 712;
-const CARRILES = { T: [14, 268, 0, 90], c: [304, 410, 0, 1.6], q: [440, 526, 0, 32] } as const;
-type Carril = keyof typeof CARRILES;
-const yDe = (k: Carril, v: number) => {
-  const [a, b, min, max] = CARRILES[k];
-  return b - ((Math.min(v, max) - min) / (max - min)) * (b - a);
-};
-const GRILLA: [number, Carril][] = [[0, "T"], [30, "T"], [60, "T"], [90, "T"], [0, "c"], [0.8, "c"], [1.6, "c"], [0, "q"], [16, "q"], [32, "q"]];
-const ETIQUETAS: [string, Carril][] = [["Temperatura de retorno, °C", "T"], ["Concentración, %", "c"], ["Caudal, m³/h", "q"]];
-const LINEA: Record<Carril, string> = { T: "lv-l1", c: "lv-l2", q: "lv-l3" };
-
-function Curvas({ ciclo, punto }: { ciclo: CicloPlanta; punto: PuntoCurva }) {
-  const dur = ciclo.fases.reduce((a, f) => a + f.s, 0);
-  const xDe = (t: number) => X0 + (t / dur) * (X1 - X0);
-  const lineas = useRef<Partial<Record<Carril, SVGPolylineElement | null>>>({});
-  const cabezas = useRef<Partial<Record<Carril, SVGCircleElement | null>>>({});
-  const previo = useRef<PuntoCurva | null>(null);
-  const puntos = useMemo(() => {
-    const armar = (k: Carril) => ciclo.curva.slice(0, -1).map((p) => `${xDe(p.t).toFixed(1)},${yDe(k, p[k]).toFixed(1)}`).join(" ");
-    return { T: armar("T"), c: armar("c"), q: armar("q") };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ciclo.curva.length, ciclo.id]);
-
-  // La punta avanza suave entre lecturas y arrastra el final de cada línea
-  useEffect(() => {
-    const dibujar = (o: { t: number; T: number; c: number; q: number }) => {
-      (["T", "c", "q"] as Carril[]).forEach((k) => {
-        const x = xDe(o.t), y = yDe(k, o[k]);
-        lineas.current[k]?.setAttribute("points", `${puntos[k]} ${x.toFixed(1)},${y.toFixed(1)}`);
-        cabezas.current[k]?.setAttribute("cx", String(x));
-        cabezas.current[k]?.setAttribute("cy", String(y));
-      });
-    };
-    const de = previo.current && previo.current.t <= punto.t ? previo.current : punto;
-    previo.current = punto;
-    if (sinMovimiento() || de === punto || ciclo.estado !== "en_curso") { dibujar(punto); return; }
-    const o = { t: de.t, T: de.T, c: de.c, q: de.q };
-    const tw = gsap.to(o, { t: punto.t, T: punto.T, c: punto.c, q: punto.q, duration: 1, ease: "none", onUpdate: () => dibujar(o) });
-    return () => { tw.kill(); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [punto, puntos]);
-
-  // Un ciclo terminado se traza al abrirlo
-  const trazado = useRef("");
-  useEffect(() => {
-    if (ciclo.estado === "en_curso" || trazado.current === ciclo.id || sinMovimiento()) return;
-    trazado.current = ciclo.id;
-    gsap.fromTo(Object.values(lineas.current), { drawSVG: "0%" }, { drawSVG: "100%", duration: 1.4, ease: "power2.inOut", stagger: 0.12 });
-  }, [ciclo.id, ciclo.estado]);
-
-  return (
-    <svg viewBox="0 0 720 540" role="img" aria-label="Temperatura, concentración y caudal del ciclo">
-      {ciclo.fases.map((f, i) => {
-        const a = xDe(inicioFase(ciclo.fases, i)), b = xDe(inicioFase(ciclo.fases, i + 1));
-        return (
-          <g key={f.n}>
-            {i > 0 && <line x1={a} x2={a} y1={14} y2={526} className="lv-div" />}
-            {f.min !== null && <rect x={a} width={b - a} y={yDe("T", f.min + 10)} height={yDe("T", f.min) - yDe("T", f.min + 10)} className="lv-band" />}
-          </g>
-        );
-      })}
-      {GRILLA.map(([v, k]) => (
-        <g key={`${k}${v}`}>
-          <line x1={X0} x2={X1} y1={yDe(k, v)} y2={yDe(k, v)} className="lv-grid" />
-          <text x={X0 - 8} y={yDe(k, v) + 4} className="lv-tick" textAnchor="end">{String(v).replace(".", ",")}</text>
-        </g>
-      ))}
-      {ETIQUETAS.map(([t, k]) => <text key={k} x={X0 + 6} y={CARRILES[k][0] + 4} className="lv-lane">{t}</text>)}
-      {(["q", "c", "T"] as Carril[]).map((k) => (
-        <g key={k}>
-          <polyline ref={(e) => { lineas.current[k] = e; }} className={LINEA[k]} fill="none" />
-          <circle ref={(e) => { cabezas.current[k] = e; }} r={k === "T" ? 4.5 : 3.2} className={`${LINEA[k]}d`} />
-        </g>
-      ))}
-    </svg>
-  );
-}
+import { enMinutos, estadosEn, variable } from "@/lib/tendencia";
 
 function Sinoptico({ tanque, destino, sub, p, activo }: { tanque: string; destino: string; sub: string; p: PuntoCurva; activo: boolean }) {
   const clase = `sy-f${activo ? "" : " is-off"}`;
@@ -135,7 +58,11 @@ export default function VistaCiclo({ ciclo }: { ciclo: CicloPlanta }) {
   const f = ciclo.fases[i];
   const dentro = punto.t - inicioFase(ciclo.fases, i);
   const filas = tact(f, punto, dentro);
-  const av = aviso(f, punto, dentro, cerrado, ciclo);
+  // Una variable que va hacia su límite tiene prioridad sobre el mensaje de la fase
+  const tiende = cerrado ? undefined : estadosEn(ciclo, ciclo.curva.length - 1).find((e) => e.estado === "tiende");
+  const av = tiende
+    ? { tono: "warn" as const, texto: `${variable(tiende.v).corto} tiende a salir de rango: llegaría a ${nf(tiende.limite!, variable(tiende.v).dec)} ${variable(tiende.v).unidad} en ${enMinutos(tiende.enS!)} (confianza ${tiende.confianza} %).` }
+    : aviso(f, punto, dentro, cerrado, ciclo);
   const tanque = f.c > 0.9 ? "Soda" : f.c > 0.1 ? (f.n === "Monofase" ? "Mono" : "Ácido") : "Agua";
   const [destino, ...resto] = ciclo.circuito.split(" · ");
   const v = ciclo.resumen?.validacion;
@@ -171,7 +98,7 @@ export default function VistaCiclo({ ciclo }: { ciclo: CicloPlanta }) {
 
       <div className="lv-b">
         <section className="card lv-chart">
-          <Curvas ciclo={ciclo} punto={punto} />
+          <GraficoPeriodo ciclo={ciclo} />
           <div className={`aviso aviso--${av.tono === "crit" ? "warn" : av.tono}`}><Ic n={ICONO_A[av.tono]} /><span>{av.texto}</span></div>
         </section>
         <div className="lv-r">
@@ -183,6 +110,7 @@ export default function VistaCiclo({ ciclo }: { ciclo: CicloPlanta }) {
               </div>
             ))}
           </div>
+          <ProyeccionCiclo ciclo={ciclo} />
           {ciclo.prediccion && <PanelModelo ciclo={ciclo} punto={punto} />}
           <section className="card pcard tact">
             <p className="pcard__t">Validación TACT</p>

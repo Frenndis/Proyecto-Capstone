@@ -16,6 +16,7 @@ const ICONOS = {
   spark: '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m7 15 4-5 3 3 5-7"/><path d="M19 6h-3M19 6v3"/>',
   play: '<path d="M6 3l14 9-14 9V3z"/>',
   stop: '<rect x="5" y="5" width="14" height="14" rx="1"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
   arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
 } as const;
 export type IconoNombre = keyof typeof ICONOS;
