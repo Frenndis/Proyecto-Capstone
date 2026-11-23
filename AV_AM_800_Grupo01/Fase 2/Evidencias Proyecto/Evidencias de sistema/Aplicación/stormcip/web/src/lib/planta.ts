@@ -27,9 +27,23 @@ export type PrediccionCiclo = {
   aguaL: number; aguaMargen: number; quimicoL: number; quimicoMargen: number; riesgo: number;
   limpio: Record<string, { s: number; margen: number }>;
 };
+export type ComparacionModelo = {
+  modelo: string; error: number; rmse: number | null; r2: number | null; auc: number | null; mejora: number; util: boolean;
+};
+export type ClasificacionModelo = {
+  umbral: number; vp: number; fp: number; vn: number; fn: number; tasaPrueba: number;
+  acierto: number; precision: number | null; recall: number | null; f1: number | null; auc: number | null;
+};
+/**
+ * Calidad de un modelo en los ciclos de prueba (mismo tipo que functions/src/planta/ml.ts).
+ * Regresión: `error` es MAE. Clasificación: `error` es Brier × 100. Los campos opcionales
+ * faltan en documentos escritos antes de que existieran, hasta el próximo reentrenamiento.
+ */
 export type MetricaModelo = {
   id: string; nombre: string; unidad: string; filas: number; filasPrueba: number; error: number; errorBase: number;
-  mejora: number; r2: number; cobertura: number | null; margen: number; util: boolean; factores: { n: string; peso: number }[];
+  mejora: number; r2: number | null; cobertura: number | null; margen: number; util: boolean; factores: { n: string; peso: number }[];
+  tipo?: "regresion" | "clasificacion"; errorEntrenamiento?: number; rmse?: number | null;
+  puntos?: { r: number; p: number }[]; lineal?: ComparacionModelo | null; clasificacion?: ClasificacionModelo | null;
 };
 export type Prediccion = {
   ml?: PrediccionCiclo;
@@ -38,7 +52,10 @@ export type Prediccion = {
 };
 export type Oportunidades = {
   decisiones: Decision[]; predicciones: Prediccion[];
-  ml?: { metricas: MetricaModelo[]; ciclos: number; algoritmo: string; arboles: number };
+  ml?: {
+    metricas: MetricaModelo[]; ciclos: number; algoritmo: string; arboles: number;
+    profundidad?: number; fraccionPrueba?: number; mejoraMinima?: number;
+  };
   totales: { aguaMesL: number; quimicoMesL: number; minutosMes: number; aguaActualMesL: number; quimicoActualMesL: number; ciclos: number };
 };
 export type EstadoDecision = { estado: "aprobada" | "descartada"; por?: string; en?: MarcaTiempo | null };

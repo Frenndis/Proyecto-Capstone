@@ -5,7 +5,8 @@ import { registrarDecision, useEstadosDecision, useOportunidades } from "@/hooks
 import { useAuth } from "@/lib/auth-context";
 import { Ic } from "@/components/ui/Ic";
 import { useConteo, gsap, useEntrada } from "@/lib/animacion";
-import { Decision, EstadoDecision, MetricaModelo, Prediccion, mmss, nf } from "@/lib/planta";
+import { Decision, EstadoDecision, Prediccion, mmss, nf } from "@/lib/planta";
+import CalidadModelos from "@/components/CalidadModelos";
 
 /** Dibuja el tiempo actual, cuándo ya estaba limpio y el tiempo propuesto. */
 function BarraTiempo({ d }: { d: Decision }) {
@@ -86,47 +87,6 @@ function FilaPrediccion({ p }: { p: Prediccion }) {
   );
 }
 
-const fmtErr = (m: MetricaModelo, v: number) => (m.id === "riesgo" ? nf(v, 1) : m.unidad === "s" ? `${nf(v)} s` : `${nf(v, m.id === "quimico" ? 1 : 0)} ${m.unidad}`);
-
-/** Qué tan bien predice cada modelo, medido en ciclos que no vio al entrenar. */
-function Modelos({ ml }: { ml: NonNullable<import("@/lib/planta").Oportunidades["ml"]> }) {
-  const principal = ml.metricas.find((m) => m.id === "limpio");
-  return (
-    <section className="card pcard ml-card">
-      <div className="ml-card__h">
-        <div>
-          <p className="pcard__t" style={{ marginBottom: 4 }}>Modelos de machine learning</p>
-          <p className="pcard__p">{ml.algoritmo} de {ml.arboles} árboles, entrenados con {nf(ml.ciclos)} ciclos <b>simulados</b>. Se reentrenan al cerrar cada ciclo y se miden con el 20 % más reciente, que no vieron.</p>
-        </div>
-      </div>
-      <div className="ml-tabla">
-        <table className="ds-t ml-t">
-          <thead><tr><th>Qué predice</th><th>Error del modelo</th><th>Error del promedio</th><th>Mejora</th><th>Estado</th></tr></thead>
-          <tbody>
-            {ml.metricas.map((m) => (
-              <tr key={m.id}>
-                <td>{m.nombre}</td>
-                <td className="mono">{fmtErr(m, m.error)}</td>
-                <td className="mono">{fmtErr(m, m.errorBase)}</td>
-                <td className="mono">{m.mejora >= 0 ? "+" : ""}{nf(m.mejora * 100)} %</td>
-                <td><span className={`st st--${m.util ? "ok" : "warn"}`}><i />{m.util ? "En uso" : "No supera la base"}</span></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {principal && (
-          <div className="ml-fact">
-            <p className="kpi__l" style={{ marginBottom: 8 }}>Lo que más alarga un enjuague</p>
-            {principal.factores.map((f) => (
-              <div className="ml-f" key={f.n}><span>{f.n}</span><i><b style={{ width: `${f.peso * 100}%` }} /></i><em className="mono">{nf(f.peso * 100)} %</em></div>
-            ))}
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
-
 export default function PrediccionPage() {
   const { oportunidades: o, cargando } = useOportunidades();
   const estados = useEstadosDecision();
@@ -160,7 +120,7 @@ export default function PrediccionPage() {
         <Numero v={t.minutosMes / 60} dec={1} suf=" h/mes" texto="de planta disponible" />
       </div>
 
-      {o.ml && <Modelos ml={o.ml} />}
+      {o.ml && <CalidadModelos ml={o.ml} />}
 
       <div className="pr-lista">
         {atender.length > 0 && <p className="pr-grupo">Atender primero · {atender.length}</p>}
