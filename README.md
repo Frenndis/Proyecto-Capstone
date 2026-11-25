@@ -14,7 +14,7 @@ Proyecto APT / Capstone · Ingeniería Informática · Duoc UC · Grupo AV_AM_80
 
 **Qué problema resuelve.** Hoy los sensores de la planta se ven solo en el PLC y no dejan historial. No hay datos centralizados, las decisiones son reactivas y no se sabe cuánta agua y químico consume cada ciclo. StormCIP transforma esas mediciones en información para controlar y optimizar el proceso.
 
-**Estado actual (23 de noviembre de 2026).** El backend y la web están desplegados en Firebase (https://stormcip-austral.web.app) y funcionan con una planta de demostración de 8 circuitos con datos simulados. Ya incluye el gráfico por variables y periodo, la proyección en minutos con nivel de confianza, los avisos de tendencia, la administración de usuarios y los planes de limpieza editables. Los modelos predictivos (Random Forest) se entrenan con ciclos simulados. Los sensores están comprados y recibidos; su instalación en la maqueta y las pruebas con datos reales siguen pendientes.
+**Estado actual (23 de noviembre de 2026).** El backend y la web están desplegados en Firebase (https://stormcip-austral.web.app) y funcionan con una planta de demostración de 8 circuitos con datos simulados. Ya incluye el gráfico por variables y periodo, la proyección en minutos con nivel de confianza, los avisos de tendencia, la administración de usuarios y los planes de limpieza editables. Los modelos predictivos (Random Forest) se entrenan con ciclos simulados. Los sensores quedaron montados en la maqueta el 16-11 y, según lo informado por el equipo el 23-11, sus datos ya llegan al dashboard; sigue pendiente validar los modelos con datos reales.
 
 ---
 
@@ -65,6 +65,8 @@ Más detalle en [`EXPLICACION-SISTEMA-SENSORES.md`](AV_AM_800_Grupo01/Fase%202/E
 ## Ejecutar el proyecto localmente
 
 El sistema se prueba con los **emuladores de Firebase**: una copia local de Firebase que no toca datos reales ni genera costos.
+
+**Docker no aplica.** StormCIP no tiene servidores ni contenedores propios: el backend son Cloud Functions, la base de datos es Firestore y la web es un sitio estático en Firebase Hosting. El papel de `docker-compose` (levantar todo con un comando) lo cumple `firebase emulators:start`. La justificación está en el [documento de diseño](AV_AM_800_Grupo01/Fase%202/Evidencias%20Proyecto/Evidencias%20de%20documentaci%C3%B3n/Documentaci%C3%B3n%20t%C3%A9cnica/StormCIP_Documento_de_Diseno_v1.0.pdf), sección 6.3.
 
 ### Requisitos
 
@@ -151,6 +153,12 @@ Los documentos formales están en Word (`.docx`, editable) y en PDF, con el mism
 | [Acta UAT](AV_AM_800_Grupo01/Fase%202/Evidencias%20Proyecto/Evidencias%20de%20documentaci%C3%B3n/Plan%20de%20pruebas/StormCIP_Acta_UAT_v1.0.pdf) | Casos de aceptación ejecutados; pendiente de firma |
 | [Lo comprado y lo construido](AV_AM_800_Grupo01/Fase%202/Evidencias%20Proyecto/Evidencias%20de%20documentaci%C3%B3n/Documentaci%C3%B3n%20t%C3%A9cnica/StormCIP_Inventario_Comprado_y_Construido_v1.0.pdf) | Inventario de equipos, software y documentos |
 | [Guía de despliegue](AV_AM_800_Grupo01/Fase%202/Evidencias%20Proyecto/Evidencias%20de%20sistema/Aplicaci%C3%B3n/stormcip/DESPLIEGUE.md) | Cómo publicar funciones, reglas y Hosting |
+| [Product Vision](AV_AM_800_Grupo01/Fase%202/Evidencias%20Proyecto/Evidencias%20de%20documentaci%C3%B3n/Plan%20del%20proyecto/StormCIP_Product_Vision_v1.0.pdf) | Problema, usuarios y propuesta de valor |
+| [Sprint Backlog y retrospectivas](AV_AM_800_Grupo01/Fase%202/Evidencias%20Proyecto/Evidencias%20de%20documentaci%C3%B3n/Plan%20del%20proyecto/StormCIP_Sprint_Backlog_y_Retrospectivas_v1.0.pdf) | Backlog priorizado, qué se desarrolló en cada sprint y qué mejoró el equipo |
+| [Definition of Done](AV_AM_800_Grupo01/Fase%202/Evidencias%20Proyecto/Evidencias%20de%20documentaci%C3%B3n/Plan%20del%20proyecto/StormCIP_Definition_of_Done_v1.0.pdf) | Criterios de término y de aceptación por historia |
+| [Documento de diseño](AV_AM_800_Grupo01/Fase%202/Evidencias%20Proyecto/Evidencias%20de%20documentaci%C3%B3n/Documentaci%C3%B3n%20t%C3%A9cnica/StormCIP_Documento_de_Diseno_v1.0.pdf) | Arquitectura, modelo de datos, diagramas UML y requisitos no funcionales |
+| [Manual técnico y de despliegue](AV_AM_800_Grupo01/Fase%202/Evidencias%20Proyecto/Evidencias%20de%20documentaci%C3%B3n/Documentaci%C3%B3n%20t%C3%A9cnica/StormCIP_Manual_Tecnico_y_Despliegue_v1.0.pdf) | Instalación, variables de entorno, ejecución y despliegue |
+| [Informe de cierre](AV_AM_800_Grupo01/Fase%203/Evidencias%20Grupales/StormCIP_Informe_de_Cierre_v1.0.pdf) | Resultados, innovación y ubicación de cada entregable del anexo |
 
 ---
 
@@ -181,7 +189,7 @@ Trabajamos con **Scrum**: 7 sprints de 2 semanas más una semana de cierre, entr
 | 7 | 16 – 29 nov | Pruebas integrales y UAT |
 | Cierre | 30 nov – 4 dic | Ajustes finales y presentación del MVP |
 
-El backlog, los hitos y los riesgos se gestionan en la planilla del plan del proyecto. Cada sprint cierra con su documento (`SPRINT1.md`, `SPRINT3.md`) con lo entregado y su *Definition of Done*.
+El backlog, los hitos y los riesgos se gestionan en la planilla del plan del proyecto. Los artefactos de Scrum están en la carpeta del plan del proyecto: *Product Vision*, *Sprint Backlog* con retrospectivas y *Definition of Done*. Los sprints 1 y 3 tienen además su documento de cierre (`SPRINT1.md`, `SPRINT3.md`).
 
 ---
 
@@ -190,13 +198,14 @@ El backlog, los hitos y los riesgos se gestionan en la planilla del plan del pro
 ```
 AV_AM_800_Grupo01/
 ├── Fase 1/                        Evidencias de la Fase 1 (definición del proyecto)
+├── Fase 3/                        Plan del proyecto v6, presentación final e informe de cierre
 └── Fase 2/
     └── Evidencias Proyecto/
         ├── Evidencias de documentación/
         │   ├── Manual de usuario/         Manual con capturas de cada pantalla
         │   ├── Plan de pruebas/           Plan, acta UAT y evidencia de cada corrida
-        │   ├── Documentación técnica/     Lo comprado y lo construido
-        │   ├── Plan del proyecto/         Backlog, historias de usuario y riesgos
+        │   ├── Documentación técnica/     Documento de diseño, manual técnico e inventario
+        │   ├── Plan del proyecto/         Product Vision, sprint backlog, Definition of Done y plan
         │   └── Diagramas UML y de arquitectura
         └── Evidencias de sistema/
             ├── Aplicación/stormcip/       La aplicación
