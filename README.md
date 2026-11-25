@@ -136,7 +136,7 @@ cd web && npm test                # pruebas unitarias de la web
 cd functions && npm run test:reglas   # reglas de Firestore (requiere el emulador encendido)
 ```
 
-Además hay pruebas de integración y de punta a punta (`npm run sim:ttn`, `e2e-volumen.js`, `e2e-quimica.js`), una prueba de carga (`carga-ingesta.js`) y un recorrido de aceptación automatizado (`uat-recorrido.js`), todos en `scripts/` y solo contra emuladores. El resultado del 23-11-2026 (522 pruebas unitarias, 20 de reglas y 38 casos de aceptación) y su evidencia están en el [plan de pruebas](AV_AM_800_Grupo01/Fase%202/Evidencias%20Proyecto/Evidencias%20de%20documentaci%C3%B3n/Plan%20de%20pruebas/StormCIP_Plan_de_Pruebas_v1.0.pdf).
+Además hay pruebas de integración y de punta a punta (`npm run sim:ttn`, `e2e-volumen.js`, `e2e-quimica.js`), una prueba de carga (`carga-ingesta.js`) y un recorrido de aceptación automatizado (`uat-recorrido.js`), todos en `scripts/` y solo contra emuladores. El resultado del 23-11-2026 (522 pruebas unitarias, 20 de reglas y 38 casos de aceptación) y su evidencia están en el [plan de pruebas](AV_AM_800_Grupo01/Fase%202/Evidencias%20Proyecto/Evidencias%20de%20documentaci%C3%B3n/Plan%20de%20pruebas/StormCIP_Plan_de_Pruebas_v1.1.pdf).
 
 Más detalle en [`README.md` de la aplicación](AV_AM_800_Grupo01/Fase%202/Evidencias%20Proyecto/Evidencias%20de%20sistema/Aplicaci%C3%B3n/stormcip/README.md). El despliegue a producción se describe en [`DESPLIEGUE.md`](AV_AM_800_Grupo01/Fase%202/Evidencias%20Proyecto/Evidencias%20de%20sistema/Aplicaci%C3%B3n/stormcip/DESPLIEGUE.md); ningún script toca producción sin flags explícitos.
 
@@ -148,9 +148,9 @@ Los documentos formales están en Word (`.docx`, editable) y en PDF, con el mism
 
 | Documento | Para qué sirve |
 |---|---|
-| [Manual de usuario](AV_AM_800_Grupo01/Fase%202/Evidencias%20Proyecto/Evidencias%20de%20documentaci%C3%B3n/Manual%20de%20usuario/StormCIP_Manual_de_Usuario_v1.0.pdf) | Cómo usar cada pantalla, por rol |
-| [Plan de pruebas](AV_AM_800_Grupo01/Fase%202/Evidencias%20Proyecto/Evidencias%20de%20documentaci%C3%B3n/Plan%20de%20pruebas/StormCIP_Plan_de_Pruebas_v1.0.pdf) | Qué se prueba, resultado y evidencia por sprint |
-| [Acta UAT](AV_AM_800_Grupo01/Fase%202/Evidencias%20Proyecto/Evidencias%20de%20documentaci%C3%B3n/Plan%20de%20pruebas/StormCIP_Acta_UAT_v1.0.pdf) | Casos de aceptación ejecutados; pendiente de firma |
+| [Manual de usuario](AV_AM_800_Grupo01/Fase%202/Evidencias%20Proyecto/Evidencias%20de%20documentaci%C3%B3n/Manual%20de%20usuario/StormCIP_Manual_de_Usuario_v1.1.pdf) | Cómo usar cada pantalla, por rol |
+| [Plan de pruebas](AV_AM_800_Grupo01/Fase%202/Evidencias%20Proyecto/Evidencias%20de%20documentaci%C3%B3n/Plan%20de%20pruebas/StormCIP_Plan_de_Pruebas_v1.1.pdf) | Qué se prueba, resultado y evidencia por sprint |
+| [Acta UAT](AV_AM_800_Grupo01/Fase%202/Evidencias%20Proyecto/Evidencias%20de%20documentaci%C3%B3n/Plan%20de%20pruebas/StormCIP_Acta_UAT_v1.1.pdf) | Casos de aceptación ejecutados; pendiente de firma |
 | [Lo comprado y lo construido](AV_AM_800_Grupo01/Fase%202/Evidencias%20Proyecto/Evidencias%20de%20documentaci%C3%B3n/Documentaci%C3%B3n%20t%C3%A9cnica/StormCIP_Inventario_Comprado_y_Construido_v1.1.pdf) | Inventario de equipos, software y documentos |
 | [Guía de despliegue](AV_AM_800_Grupo01/Fase%202/Evidencias%20Proyecto/Evidencias%20de%20sistema/Aplicaci%C3%B3n/stormcip/DESPLIEGUE.md) | Cómo publicar funciones, reglas y Hosting |
 | [Product Vision](AV_AM_800_Grupo01/Fase%202/Evidencias%20Proyecto/Evidencias%20de%20documentaci%C3%B3n/Plan%20del%20proyecto/StormCIP_Product_Vision_v1.0.pdf) | Problema, usuarios y propuesta de valor |
