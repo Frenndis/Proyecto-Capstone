@@ -198,22 +198,22 @@ El backlog, los hitos y los riesgos se gestionan en la planilla del plan del pro
 ```
 AV_AM_800_Grupo01/
 ├── Fase 1/                        Evidencias de la Fase 1 (definición del proyecto)
-├── Fase 3/                        Plan del proyecto v6, presentación final e informe de cierre
-└── Fase 2/
-    └── Evidencias Proyecto/
-        ├── Evidencias de documentación/
-        │   ├── Manual de usuario/         Manual con capturas de cada pantalla
-        │   ├── Plan de pruebas/           Plan, acta UAT y evidencia de cada corrida
-        │   ├── Documentación técnica/     Documento de diseño, manual técnico e inventario
-        │   ├── Plan del proyecto/         Product Vision, sprint backlog, Definition of Done y plan
-        │   └── Diagramas UML y de arquitectura
-        └── Evidencias de sistema/
-            ├── Aplicación/stormcip/       La aplicación
-            │   ├── functions/             Cloud Functions (TypeScript)
-            │   ├── web/                   Dashboard (Next.js)
-            │   ├── scripts/               Seed y simuladores
-            │   └── firestore.rules        Reglas de seguridad por rol
-            ├── Base de datos/             Modelo de datos y pendientes técnicos
-            ├── Gestion Sensores/          Cotización, orden de compra, factura y fotos
-            └── Informacion Tecnica Sensores/   Datasheet y firmware del WQS-LB
+├── Fase 2/
+│   └── Evidencias Proyecto/
+│       ├── Evidencias de documentación/
+│       │   ├── Manual de usuario/         Manual con capturas de cada pantalla
+│       │   ├── Plan de pruebas/           Plan, acta UAT y evidencia de cada corrida
+│       │   ├── Documentación técnica/     Documento de diseño, manual técnico e inventario
+│       │   ├── Plan del proyecto/         Product Vision, sprint backlog, Definition of Done y plan
+│       │   └── Diagramas UML y de arquitectura
+│       └── Evidencias de sistema/
+│           ├── Aplicación/stormcip/       La aplicación
+│           │   ├── functions/             Cloud Functions (TypeScript)
+│           │   ├── web/                   Dashboard (Next.js)
+│           │   ├── scripts/               Seed y simuladores
+│           │   └── firestore.rules        Reglas de seguridad por rol
+│           ├── Base de datos/             Modelo de datos y pendientes técnicos
+│           ├── Gestion Sensores/          Cotización, orden de compra, factura y fotos
+│           └── Informacion Tecnica Sensores/   Datasheet y firmware del WQS-LB
+└── Fase 3/                        Plan del proyecto v6, presentación final e informe de cierre
 ```
